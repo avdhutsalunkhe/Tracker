@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { useData } from '../../context/DataContext';
 import { TopicStatus, GateTopic } from '../../types';
-import { format } from 'date-fns';
-import { Plus, Star, BookOpen, Clock, CheckCircle2 } from 'lucide-react';
+import { Plus, Star } from 'lucide-react';
 
 interface AddTopicModalProps {
   isOpen: boolean;
@@ -34,17 +33,42 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
   );
   const [submitting, setSubmitting] = useState(false);
 
+  // Sync form state whenever modal opens or target subject/topic changes
+  useEffect(() => {
+    if (!isOpen) return;
+    if (topicToEdit) {
+      setSubjectId(topicToEdit.subject_id);
+      setTopicName(topicToEdit.topic_name);
+      setStatus(topicToEdit.status);
+      setConfidence(topicToEdit.confidence);
+      setPyqsSolved(topicToEdit.pyqs_solved);
+      setStudyHours(topicToEdit.study_hours);
+      setNotes(topicToEdit.notes || '');
+      setCoveredDate(topicToEdit.covered_date || selectedDate);
+    } else {
+      setSubjectId(defaultSubjectId || subjects[0]?.id || '');
+      setTopicName('');
+      setStatus('In Progress');
+      setConfidence(3);
+      setPyqsSolved(10);
+      setStudyHours(1.5);
+      setNotes('');
+      setCoveredDate(selectedDate);
+    }
+  }, [isOpen, topicToEdit, defaultSubjectId, subjects, selectedDate]);
+
   const statuses: TopicStatus[] = ['Not Started', 'In Progress', 'Completed'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topicName.trim() || !subjectId) return;
+    const resolvedSubjectId = subjectId || subjects[0]?.id || '';
+    if (!topicName.trim() || !resolvedSubjectId) return;
 
     setSubmitting(true);
     try {
       if (topicToEdit) {
         await updateTopic(topicToEdit.id, {
-          subject_id: subjectId,
+          subject_id: resolvedSubjectId,
           topic_name: topicName.trim(),
           status,
           confidence,
@@ -55,7 +79,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
         });
       } else {
         await addTopic({
-          subject_id: subjectId,
+          subject_id: resolvedSubjectId,
           topic_name: topicName.trim(),
           status,
           confidence,

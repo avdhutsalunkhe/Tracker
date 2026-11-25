@@ -594,8 +594,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // =========================================================================
   const addSubject = async (name: string, color: string): Promise<string | null> => {
     const currentUserId = user?.id || '';
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `subj-${Date.now()}`;
     const newSubject: GateSubject = {
-      id: `subj-${Date.now()}`,
+      id: newId,
       user_id: currentUserId,
       name: name.trim(),
       color,
@@ -609,6 +610,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('gate_subjects').insert({
+          id: newId,
           user_id: currentUserId,
           name: newSubject.name,
           color: newSubject.color,
@@ -767,9 +769,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       calculatedNextRevision = format(addDays(new Date(), SPACED_REPETITION_INTERVALS[0]), 'yyyy-MM-dd');
     }
 
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `topic-${Date.now()}`;
     const newTopic: GateTopic = {
       ...topicData,
-      id: `topic-${Date.now()}`,
+      id: newId,
       user_id: currentUserId,
       revision_count: 0,
       next_revision_date: calculatedNextRevision,
@@ -783,6 +786,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('gate_topics').insert({
+          id: newId,
           user_id: currentUserId,
           subject_id: newTopic.subject_id,
           topic_name: newTopic.topic_name,

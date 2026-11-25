@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { SUBJECT_COLORS } from '../../lib/constants';
 import { Plus, Check } from 'lucide-react';
@@ -25,6 +25,13 @@ export const SubjectModal: React.FC<SubjectModalProps> = ({
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(initialName);
+      setColor(initialColor);
+    }
+  }, [isOpen, initialName, initialColor]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
