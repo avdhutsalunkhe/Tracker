@@ -26,6 +26,7 @@ import { TestsPage } from './pages/TestsPage';
 import { VaultPage } from './pages/VaultPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SyllabusPage } from './pages/SyllabusPage';
 
 const AppContent: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -71,6 +72,7 @@ const AppContent: React.FC = () => {
             <Route path="/" element={<TodayPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/gate" element={<GatePage />} />
+            <Route path="/syllabus" element={<SyllabusPage />} />
             <Route path="/revisions" element={<RevisionsPage />} />
             <Route path="/timer" element={<TimerPage />} />
             <Route path="/tests" element={<TestsPage />} />

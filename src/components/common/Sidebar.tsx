@@ -13,7 +13,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Flame
+  Flame,
+  FileText
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -29,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
     { to: '/', label: 'Today', icon: CheckSquare },
     { to: '/calendar', label: 'Calendar & Heatmap', icon: CalendarDays },
     { to: '/gate', label: 'GATE Study', icon: BookOpen },
+    { to: '/syllabus', label: 'GATE Syllabus', icon: FileText },
     { to: '/revisions', label: 'Revisions Queue', icon: RotateCcw },
     { to: '/timer', label: 'Study Timer', icon: Timer },
     { to: '/tests', label: 'Tests & Mistakes', icon: Award },
