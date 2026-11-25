@@ -19,6 +19,8 @@ export const TestLoggerModal: React.FC<TestLoggerModalProps> = ({ isOpen, onClos
   const [testDate, setTestDate] = useState(selectedDate || format(new Date(), 'yyyy-MM-dd'));
   const [marksScored, setMarksScored] = useState<number>(65);
   const [totalMarks, setTotalMarks] = useState<number>(100);
+  const [aptitudeMarks, setAptitudeMarks] = useState<number>(12);
+  const [coreMarks, setCoreMarks] = useState<number>(53);
   const [correctCount, setCorrectCount] = useState<number>(45);
   const [wrongCount, setWrongCount] = useState<number>(10);
   const [unattemptedCount, setUnattemptedCount] = useState<number>(10);
@@ -41,6 +43,8 @@ export const TestLoggerModal: React.FC<TestLoggerModalProps> = ({ isOpen, onClos
         test_date: testDate,
         marks_scored: Number(marksScored) || 0,
         total_marks: Number(totalMarks) || 100,
+        aptitude_marks: Number(aptitudeMarks) || 0,
+        core_marks: Number(coreMarks) || 0,
         correct_count: Number(correctCount) || 0,
         wrong_count: Number(wrongCount) || 0,
         unattempted_count: Number(unattemptedCount) || 0,
@@ -152,6 +156,33 @@ export const TestLoggerModal: React.FC<TestLoggerModalProps> = ({ isOpen, onClos
               value={negativeMarks}
               onChange={(e) => setNegativeMarks(Number(e.target.value))}
               className="w-full p-2.5 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-xs outline-none font-bold text-rose-600"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              General Aptitude (out of 15)
+            </label>
+            <input
+              type="number"
+              step="0.25"
+              value={aptitudeMarks}
+              onChange={(e) => setAptitudeMarks(Number(e.target.value))}
+              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs tabular-nums outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Core Technical (out of 85)
+            </label>
+            <input
+              type="number"
+              step="0.25"
+              value={coreMarks}
+              onChange={(e) => setCoreMarks(Number(e.target.value))}
+              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs tabular-nums outline-none"
             />
           </div>
         </div>

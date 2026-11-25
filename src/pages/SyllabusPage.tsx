@@ -17,7 +17,7 @@ import {
 export const SyllabusPage: React.FC = () => {
   const { subjects, topics, addSubject, addTopic, updateTopic } = useData();
 
-  const [selectedPaperCode, setSelectedPaperCode] = useState<'CS' | 'DA'>('CS');
+  const [selectedPaperCode, setSelectedPaperCode] = useState<'CS' | 'DA' | 'ECE' | 'EE' | 'ME'>('CS');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSectionNumber, setSelectedSectionNumber] = useState<number | null>(null);
   const [importingPaper, setImportingPaper] = useState(false);
@@ -201,7 +201,7 @@ export const SyllabusPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs shrink-0">
+        <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs overflow-x-auto max-w-full">
           {GATE_SYLLABUS_PAPERS.map((paper) => {
             const isActive = selectedPaperCode === paper.code;
             return (

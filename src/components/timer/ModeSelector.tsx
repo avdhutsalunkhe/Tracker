@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTimer } from '../../context/TimerContext';
 import { useData } from '../../context/DataContext';
-import { TimerMode, PomodoroPhase } from '../../types';
-import { Timer, Clock, Sliders, BookOpen } from 'lucide-react';
+import { soundscape, SoundscapeType } from '../../lib/soundscape';
+import { Timer, Clock, Volume2 } from 'lucide-react';
 
 export const ModeSelector: React.FC = () => {
   const {
@@ -23,11 +23,15 @@ export const ModeSelector: React.FC = () => {
 
   const { subjects, topics } = useData();
 
+  const [noiseType, setNoiseType] = useState<SoundscapeType>(() => soundscape.getType());
+  const [noiseVolume, setNoiseVolume] = useState(0.25);
+
   // Presets: [focus, break]
   const presets = [
     { label: '25 / 5', focus: 25, breakMins: 5 },
     { label: '50 / 10', focus: 50, breakMins: 10 },
     { label: '90 / 15', focus: 90, breakMins: 15 },
+    { label: '180m Exam', focus: 180, breakMins: 10 },
   ];
 
   const filteredTopics = selectedSubjectId
@@ -76,7 +80,7 @@ export const ModeSelector: React.FC = () => {
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
             Duration Presets (Focus / Break)
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {presets.map((p) => {
               const isSelected = focusMinutes === p.focus && breakMinutes === p.breakMins;
               return (
@@ -143,6 +147,56 @@ export const ModeSelector: React.FC = () => {
             </select>
           </div>
         )}
+      </div>
+
+      {/* Offline Focus Soundscape */}
+      <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Volume2 className="w-3.5 h-3.5 text-indigo-500" />
+            Offline Focus Soundscape
+          </label>
+          {noiseType !== 'off' && (
+            <input
+              type="range"
+              min="0.05"
+              max="1"
+              step="0.05"
+              value={noiseVolume}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setNoiseVolume(v);
+                soundscape.setVolume(v);
+              }}
+              className="w-24 accent-indigo-600"
+              aria-label="Soundscape volume"
+            />
+          )}
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {([
+            { id: 'off', label: 'Off' },
+            { id: 'brown', label: 'Brown' },
+            { id: 'rain', label: 'Rain' },
+            { id: 'white', label: 'White' },
+          ] as const).map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => {
+                setNoiseType(n.id);
+                soundscape.start(n.id, noiseVolume);
+              }}
+              className={`py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-colors ${
+                noiseType === n.id
+                  ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              {n.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -11,6 +11,11 @@ import {
   MockTest,
   MistakeLog,
   Flashcard,
+  TimetableBlock,
+  AllottedSlot,
+  PYQMatrixEntry,
+  PYQQuestionType,
+  FocusQuality,
   PriorityLevel,
   HabitTimeSlot,
   TopicStatus,
@@ -23,12 +28,17 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { loadStoredData, saveStoredData, getEmptyUserData, StorageData } from '../lib/storage';
+import { getSnapshot, saveSnapshot, clearUserQueue } from '../lib/localCache';
+import { SyncStatus, flushSyncQueue, mergeGuestSnapshotIfPresent } from '../lib/syncEngine';
+import { autoAllocateStudySlots, SAMPLE_ROUTINE_BLOCKS } from '../utils/scheduleAllocator';
+import { checkDueLocalNotifications } from '../lib/pushNotifications';
 import { SPACED_REPETITION_INTERVALS, GATE_BRANCH_PRESETS } from '../lib/constants';
 import { sound } from '../lib/sound';
 import { format, addDays, parseISO, differenceInCalendarDays, subDays } from 'date-fns';
 
 interface DataContextType {
   loading: boolean;
+  syncStatus: SyncStatus;
   selectedDate: string; // YYYY-MM-DD
   setSelectedDate: (date: string) => void;
   goToToday: () => void;
@@ -47,6 +57,9 @@ interface DataContextType {
   mockTests: MockTest[];
   mistakes: MistakeLog[];
   flashcards: Flashcard[];
+  timetableBlocks: TimetableBlock[];
+  allottedSlots: AllottedSlot[];
+  pyqMatrix: PYQMatrixEntry[];
 
   // Computed Properties for selected date
   selectedDateHabits: Array<{ habit: DailyHabit; completed: boolean; logId?: string }>;
@@ -81,7 +94,7 @@ interface DataContextType {
   markTopicRevised: (topicId: string, remarks?: string, customNextDate?: string) => Promise<void>;
 
   // Actions - Study Sessions
-  logStudySession: (subjectId: string | null, topicId: string | null, durationMinutes: number, mode: TimerMode) => Promise<void>;
+  logStudySession: (subjectId: string | null, topicId: string | null, durationMinutes: number, mode: TimerMode, focusQuality?: FocusQuality) => Promise<void>;
 
   // Actions - Mock Tests & Mistakes
   addMockTest: (data: Omit<MockTest, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
@@ -90,14 +103,30 @@ interface DataContextType {
   toggleMistakeResolved: (id: string) => Promise<void>;
   deleteMistake: (id: string) => Promise<void>;
 
-  // Actions - Flashcards
+  // Actions - Timetable & Auto Study Allocator
+  addTimetableBlock: (block: Omit<TimetableBlock, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
+  updateTimetableBlock: (id: string, updates: Partial<TimetableBlock>) => Promise<void>;
+  deleteTimetableBlock: (id: string) => Promise<void>;
+  loadSampleRoutine: () => Promise<void>;
+  autoPlanDay: (dateStr?: string) => Promise<void>;
+  toggleSlotLock: (slotId: string) => Promise<void>;
+  toggleSlotCompleted: (slotId: string) => Promise<void>;
+  deleteAllottedSlot: (slotId: string) => Promise<void>;
+
+  // Actions - PYQ Matrix
+  upsertPyqMatrix: (year: number, questionType: PYQQuestionType, solvedDelta: number, correctDelta: number) => Promise<void>;
+
+  // Actions - Flashcards & SM-2
   addFlashcard: (subjectId: string | null, frontPrompt: string, backAnswer: string) => Promise<void>;
   toggleFlashcardReview: (id: string) => Promise<void>;
+  gradeFlashcardSM2: (id: string, quality: 0 | 2 | 4 | 5) => Promise<void>;
   deleteFlashcard: (id: string) => Promise<void>;
 
-  // Actions - Settings & Data Export
+  // Actions - Settings, Streak Freeze & Data Backup
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  toggleStreakFreeze: (dateStr: string) => Promise<void>;
   exportData: (formatType: 'json' | 'csv') => void;
+  importBackupData: (imported: StorageData) => Promise<void>;
   resetAllData: () => Promise<void>;
 
   // Day drawer helper
@@ -111,12 +140,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'Offline Cached' : 'Synced'
+  );
   const [selectedDate, setSelectedDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
 
-  // Data State (starts empty until authenticated user loads)
-  const [data, setData] = useState<StorageData>(() => getEmptyUserData(user?.id || ''));
+  // Data State (starts from fast localStorage cache if available for zero-flicker boot)
+  const [data, setData] = useState<StorageData>(() =>
+    user?.id ? loadStoredData(user.id) : getEmptyUserData('')
+  );
 
-  // Sync / Load on user change
+  // Sync / Load on user change (Instant IndexedDB hydration + Silent SWR pull)
   useEffect(() => {
     const currentUserId = user?.id;
 
@@ -126,20 +160,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      const offlineData = loadStoredData(currentUserId);
-      setData(offlineData);
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    // Load from Supabase for authenticated user
-    const fetchCloudData = async () => {
+    const hydrateAndRevalidate = async () => {
+      // 1. Hydrate from IndexedDB immediately (no spinner if cache exists)
+      const cached = await getSnapshot(currentUserId);
+      if (cached && !cancelled) {
+        setData(cached.data);
+        setLoading(false);
+      }
+
+      if (!isSupabaseConfigured || !supabase) {
+        if (!cached) {
+          setData(loadStoredData(currentUserId));
+        }
+        setSyncStatus('Offline Cached');
+        setLoading(false);
+        return;
+      }
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setSyncStatus('Offline Cached');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Merge guest data if present, flush any queued offline mutations, then SWR pull
       const client = supabase;
-      if (!client) return;
-
-      setLoading(true);
+      setSyncStatus('Syncing...');
       try {
+        await mergeGuestSnapshotIfPresent(currentUserId);
+        await flushSyncQueue(currentUserId, setSyncStatus);
+
         const [
           settingsRes,
           habitsRes,
@@ -152,6 +204,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mockTestsRes,
           mistakesRes,
           flashcardsRes,
+          timetableRes,
+          slotsRes,
         ] = await Promise.all([
           client.from('user_settings').select('*').eq('user_id', currentUserId).maybeSingle(),
           client.from('daily_habits').select('*').eq('user_id', currentUserId).order('sort_order', { ascending: true }),
@@ -164,11 +218,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           client.from('mock_tests').select('*').eq('user_id', currentUserId).order('test_date', { ascending: false }),
           client.from('mistake_logs').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }),
           client.from('flashcards').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }),
+          client.from('timetable_blocks').select('*').eq('user_id', currentUserId).order('start_time', { ascending: true }).then((r) => r, () => ({ data: [] })),
+          client.from('allotted_slots').select('*').eq('user_id', currentUserId).order('start_time', { ascending: true }).then((r) => r, () => ({ data: [] })),
         ]);
 
         let userSettings = settingsRes.data;
         if (!userSettings) {
-          // Initialize user settings if not present
           const defaultSettings: UserSettings = {
             user_id: currentUserId,
             gate_exam_date: '2027-02-06',
@@ -192,26 +247,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mockTests: mockTestsRes.data || [],
           mistakes: mistakesRes.data || [],
           flashcards: flashcardsRes.data || [],
+          timetableBlocks: (timetableRes as { data?: TimetableBlock[] | null })?.data || [],
+          allottedSlots: (slotsRes as { data?: AllottedSlot[] | null })?.data || [],
+          pyqMatrix: loadStoredData(currentUserId).pyqMatrix || [],
         };
 
-        setData(cloudData);
-        saveStoredData(currentUserId, cloudData);
+        if (!cancelled) {
+          setData(cloudData);
+          saveStoredData(currentUserId, cloudData);
+          await saveSnapshot(currentUserId, cloudData);
+          setSyncStatus('Synced');
+        }
       } catch (err) {
-        console.warn('Failed to load data from Supabase, fallback to local storage:', err);
-        const fallback = loadStoredData(currentUserId);
-        setData(fallback);
+        console.warn('SWR sync error, keeping local cache:', err);
+        if (!cancelled) {
+          setSyncStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'Offline Cached' : 'Synced');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchCloudData();
+    hydrateAndRevalidate();
+
+    const handleOnline = () => {
+      flushSyncQueue(currentUserId, setSyncStatus);
+    };
+    const handleOffline = () => {
+      setSyncStatus('Offline Cached');
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        flushSyncQueue(currentUserId, setSyncStatus);
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [user?.id]);
 
-  // Persist local store whenever state changes (offline capability)
+  // Persist IndexedDB + localStorage snapshot whenever state changes
   useEffect(() => {
     if (user?.id) {
       saveStoredData(user.id, data);
+      saveSnapshot(user.id, data);
     }
   }, [data, user?.id]);
 
@@ -959,7 +1046,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     subjectId: string | null,
     topicId: string | null,
     durationMinutes: number,
-    mode: TimerMode
+    mode: TimerMode,
+    focusQuality: FocusQuality = 'Deep'
   ) => {
     if (durationMinutes < 1) return;
 
@@ -968,13 +1056,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const additionalHours = Math.round((durationMinutes / 60) * 10) / 10;
 
     const newSession: StudySession = {
-      id: `sess-${Date.now()}`,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`,
       user_id: currentUserId,
       subject_id: subjectId,
       topic_id: topicId,
       session_date: todayStr,
       duration_minutes: durationMinutes,
       mode,
+      focus_quality: focusQuality,
       created_at: new Date().toISOString(),
     };
 
@@ -1384,6 +1473,309 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Foreground / local fallback notification check every 60s
+  useEffect(() => {
+    const check = () => {
+      checkDueLocalNotifications(
+        data.allottedSlots || [],
+        data.settings?.pre_alert_mins ?? 5,
+        data.settings?.evening_reminder_time ?? '20:30'
+      );
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [data.allottedSlots, data.settings?.pre_alert_mins, data.settings?.evening_reminder_time]);
+
+  // =========================================================================
+  // ACTIONS: TIMETABLE & AUTO STUDY ALLOCATOR
+  // =========================================================================
+  const addTimetableBlock = async (block: Omit<TimetableBlock, 'id' | 'user_id' | 'created_at'>) => {
+    const currentUserId = user?.id || '';
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tt-${Date.now()}`;
+    const newBlock: TimetableBlock = {
+      ...block,
+      id: newId,
+      user_id: currentUserId,
+      created_at: new Date().toISOString(),
+    };
+
+    setData((prev) => ({
+      ...prev,
+      timetableBlocks: [...(prev.timetableBlocks || []), newBlock].sort((a, b) =>
+        a.start_time.localeCompare(b.start_time)
+      ),
+    }));
+    showToast({ type: 'success', title: 'Routine Block Added', message: `${newBlock.title} (${newBlock.start_time}–${newBlock.end_time})` });
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('timetable_blocks').insert(newBlock).then(({ error }) => {
+        if (error) console.warn('timetable_blocks insert:', error.message);
+      });
+    }
+  };
+
+  const updateTimetableBlock = async (id: string, updates: Partial<TimetableBlock>) => {
+    setData((prev) => ({
+      ...prev,
+      timetableBlocks: (prev.timetableBlocks || [])
+        .map((b) => (b.id === id ? { ...b, ...updates } : b))
+        .sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    }));
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('timetable_blocks').update(updates).eq('id', id).then(({ error }) => {
+        if (error) console.warn('timetable_blocks update:', error.message);
+      });
+    }
+  };
+
+  const deleteTimetableBlock = async (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      timetableBlocks: (prev.timetableBlocks || []).filter((b) => b.id !== id),
+    }));
+    showToast({ type: 'info', title: 'Routine Block Removed' });
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('timetable_blocks').delete().eq('id', id).then(({ error }) => {
+        if (error) console.warn('timetable_blocks delete:', error.message);
+      });
+    }
+  };
+
+  const loadSampleRoutine = async () => {
+    const currentUserId = user?.id || '';
+    const seeded: TimetableBlock[] = SAMPLE_ROUTINE_BLOCKS.map((b, i) => ({
+      ...b,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tt-${Date.now()}-${i}`,
+      user_id: currentUserId,
+      created_at: new Date().toISOString(),
+    }));
+
+    setData((prev) => ({
+      ...prev,
+      timetableBlocks: [...(prev.timetableBlocks || []), ...seeded].sort((a, b) =>
+        a.start_time.localeCompare(b.start_time)
+      ),
+    }));
+    showToast({ type: 'success', title: 'Sample Routine Loaded', message: `Added ${seeded.length} routine blocks.` });
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('timetable_blocks').insert(seeded).then(({ error }) => {
+        if (error) console.warn('sample routine sync:', error.message);
+      });
+    }
+  };
+
+  const autoPlanDay = async (dateStr?: string) => {
+    const targetDate = dateStr || selectedDate;
+    const currentUserId = user?.id || '';
+    const generated = autoAllocateStudySlots({
+      userId: currentUserId,
+      dateStr: targetDate,
+      blocks: data.timetableBlocks || [],
+      existingSlots: data.allottedSlots || [],
+      topics: data.topics,
+      subjects: data.subjects,
+      flashcards: data.flashcards,
+    });
+
+    setData((prev) => ({
+      ...prev,
+      allottedSlots: [
+        ...(prev.allottedSlots || []).filter((s) => s.slot_date !== targetDate),
+        ...generated,
+      ],
+    }));
+    showToast({
+      type: 'success',
+      title: 'Day Auto-Planned',
+      message: `Scheduled ${generated.length} study blocks for ${targetDate}.`,
+    });
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase
+        .from('allotted_slots')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('slot_date', targetDate)
+        .eq('is_locked', false);
+      const unlocked = generated.filter((s) => !s.is_locked);
+      if (unlocked.length > 0) {
+        await supabase.from('allotted_slots').insert(unlocked);
+      }
+    }
+  };
+
+  const toggleSlotLock = async (slotId: string) => {
+    const slot = (data.allottedSlots || []).find((s) => s.id === slotId);
+    if (!slot) return;
+    const nextLocked = !slot.is_locked;
+    setData((prev) => ({
+      ...prev,
+      allottedSlots: (prev.allottedSlots || []).map((s) =>
+        s.id === slotId ? { ...s, is_locked: nextLocked } : s
+      ),
+    }));
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('allotted_slots').update({ is_locked: nextLocked }).eq('id', slotId);
+    }
+  };
+
+  const toggleSlotCompleted = async (slotId: string) => {
+    const slot = (data.allottedSlots || []).find((s) => s.id === slotId);
+    if (!slot) return;
+    const nextCompleted = !slot.completed;
+    if (nextCompleted) sound.playCheckmark();
+    setData((prev) => ({
+      ...prev,
+      allottedSlots: (prev.allottedSlots || []).map((s) =>
+        s.id === slotId ? { ...s, completed: nextCompleted } : s
+      ),
+    }));
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('allotted_slots').update({ completed: nextCompleted }).eq('id', slotId);
+    }
+  };
+
+  const deleteAllottedSlot = async (slotId: string) => {
+    setData((prev) => ({
+      ...prev,
+      allottedSlots: (prev.allottedSlots || []).filter((s) => s.id !== slotId),
+    }));
+    if (user?.id && isSupabaseConfigured && supabase) {
+      await supabase.from('allotted_slots').delete().eq('id', slotId);
+    }
+  };
+
+  const upsertPyqMatrix = async (
+    year: number,
+    questionType: PYQQuestionType,
+    solvedDelta: number,
+    correctDelta: number
+  ) => {
+    const currentUserId = user?.id || '';
+    setData((prev) => {
+      const list = prev.pyqMatrix || [];
+      const existing = list.find((e) => e.year === year && e.question_type === questionType);
+      if (existing) {
+        return {
+          ...prev,
+          pyqMatrix: list.map((e) =>
+            e.id === existing.id
+              ? {
+                  ...e,
+                  solved_count: Math.max(0, e.solved_count + solvedDelta),
+                  correct_count: Math.max(0, e.correct_count + correctDelta),
+                }
+              : e
+          ),
+        };
+      }
+      return {
+        ...prev,
+        pyqMatrix: [
+          ...list,
+          {
+            id: `pyq-${year}-${questionType}`,
+            user_id: currentUserId,
+            year,
+            question_type: questionType,
+            solved_count: Math.max(0, solvedDelta),
+            correct_count: Math.max(0, correctDelta),
+          },
+        ],
+      };
+    });
+  };
+
+  const gradeFlashcardSM2 = async (id: string, quality: 0 | 2 | 4 | 5) => {
+    const card = data.flashcards.find((c) => c.id === id);
+    if (!card) return;
+    const prevEF = card.ease_factor ?? 2.5;
+    const prevInterval = card.interval_days ?? 1;
+    let nextInterval = 1;
+    if (quality < 3) {
+      nextInterval = 1;
+    } else if (prevInterval === 1) {
+      nextInterval = quality === 5 ? 4 : 3;
+    } else {
+      nextInterval = Math.round(prevInterval * prevEF);
+    }
+    const nextEF = Math.max(
+      1.3,
+      prevEF + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+    );
+    const nextReviewDate = format(addDays(new Date(), nextInterval), 'yyyy-MM-dd');
+    const needsReview = quality < 4;
+
+    setData((prev) => ({
+      ...prev,
+      flashcards: prev.flashcards.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              ease_factor: Math.round(nextEF * 100) / 100,
+              interval_days: nextInterval,
+              next_review_date: nextReviewDate,
+              needs_review: needsReview,
+            }
+          : c
+      ),
+    }));
+  };
+
+  const toggleStreakFreeze = async (dateStr: string) => {
+    const existing = data.settings?.streak_freeze_dates || [];
+    const monthPrefix = dateStr.slice(0, 7);
+    const isFrozen = existing.includes(dateStr);
+    if (!isFrozen) {
+      const monthCount = existing.filter((d) => d.startsWith(monthPrefix)).length;
+      if (monthCount >= 2) {
+        showToast({
+          type: 'warning',
+          title: 'Monthly Freeze Limit Reached',
+          message: 'You can use up to 2 planned Rest Days per month.',
+        });
+        return;
+      }
+    }
+    const updatedDates = isFrozen
+      ? existing.filter((d) => d !== dateStr)
+      : [...existing, dateStr];
+    await updateSettings({ streak_freeze_dates: updatedDates });
+  };
+
+  const importBackupData = async (imported: StorageData) => {
+    const currentUserId = user?.id || '';
+    const normalized: StorageData = {
+      settings: { ...imported.settings, user_id: currentUserId },
+      habits: (imported.habits || []).map((h) => ({ ...h, user_id: currentUserId })),
+      habitLogs: (imported.habitLogs || []).map((l) => ({ ...l, user_id: currentUserId })),
+      tasks: (imported.tasks || []).map((t) => ({ ...t, user_id: currentUserId })),
+      subjects: (imported.subjects || []).map((s) => ({ ...s, user_id: currentUserId })),
+      topics: (imported.topics || []).map((t) => ({ ...t, user_id: currentUserId })),
+      revisions: (imported.revisions || []).map((r) => ({ ...r, user_id: currentUserId })),
+      sessions: (imported.sessions || []).map((s) => ({ ...s, user_id: currentUserId })),
+      mockTests: (imported.mockTests || []).map((m) => ({ ...m, user_id: currentUserId })),
+      mistakes: (imported.mistakes || []).map((m) => ({ ...m, user_id: currentUserId })),
+      flashcards: (imported.flashcards || []).map((f) => ({ ...f, user_id: currentUserId })),
+      timetableBlocks: (imported.timetableBlocks || []).map((b) => ({ ...b, user_id: currentUserId })),
+      allottedSlots: (imported.allottedSlots || []).map((s) => ({ ...s, user_id: currentUserId })),
+      pyqMatrix: (imported.pyqMatrix || []).map((p) => ({ ...p, user_id: currentUserId })),
+    };
+
+    setData(normalized);
+    saveStoredData(currentUserId, normalized);
+    await saveSnapshot(currentUserId, normalized);
+    showToast({
+      type: 'success',
+      title: 'Backup Restored',
+      message: `Imported ${normalized.topics.length} topics and ${normalized.habits.length} habits.`,
+    });
+  };
+
   // Helper for Calendar Day Drawer
   const getDayDetailData = useCallback(
     (targetDate: string): DayDetailData => {
@@ -1441,6 +1833,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider
       value={{
         loading,
+        syncStatus,
         selectedDate,
         setSelectedDate,
         goToToday,
@@ -1457,6 +1850,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mockTests: data.mockTests,
         mistakes: data.mistakes,
         flashcards: data.flashcards,
+        timetableBlocks: data.timetableBlocks || [],
+        allottedSlots: data.allottedSlots || [],
+        pyqMatrix: data.pyqMatrix || [],
         selectedDateHabits,
         selectedDateTasks,
         selectedDateStudyHours,
@@ -1479,6 +1875,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteTopic,
         markTopicRevised,
         logStudySession,
+        addTimetableBlock,
+        updateTimetableBlock,
+        deleteTimetableBlock,
+        loadSampleRoutine,
+        autoPlanDay,
+        toggleSlotLock,
+        toggleSlotCompleted,
+        deleteAllottedSlot,
+        upsertPyqMatrix,
         addMockTest,
         deleteMockTest,
         addMistake,
@@ -1486,9 +1891,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteMistake,
         addFlashcard,
         toggleFlashcardReview,
+        gradeFlashcardSM2,
         deleteFlashcard,
         updateSettings,
+        toggleStreakFreeze,
         exportData,
+        importBackupData,
         resetAllData,
         getDayDetailData,
       }}

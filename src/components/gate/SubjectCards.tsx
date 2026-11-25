@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { GateSubject } from '../../types';
+import { ConfirmModal } from '../common/ConfirmModal';
 import { BookOpen, CheckCircle2, Clock, RotateCcw, Plus, Sparkles, Edit2, Trash2 } from 'lucide-react';
 
 interface SubjectCardsProps {
@@ -19,6 +20,7 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
   onEditSubject,
 }) => {
   const { subjects, topics, revisions, sessions, deleteSubject } = useData();
+  const [subjectToDelete, setSubjectToDelete] = useState<GateSubject | null>(null);
 
   // Compute metrics per subject
   const subjectMetrics = subjects.map((subj) => {
@@ -130,17 +132,17 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
                 <div>
                   {/* Subject Name & Actions */}
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-start gap-2 min-w-0">
                       <span
-                        className="w-3 h-3 rounded-full shrink-0 shadow-xs"
+                        className="w-3 h-3 rounded-full shrink-0 shadow-xs mt-1"
                         style={{ backgroundColor: item.subject.color }}
                       />
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 break-words line-clamp-2">
                         {item.subject.name}
                       </h3>
                     </div>
 
-                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                    <div className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 flex items-center gap-1 transition-opacity shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -154,9 +156,7 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`Delete ${item.subject.name} and all its topics?`)) {
-                            deleteSubject(item.subject.id);
-                          }
+                          setSubjectToDelete(item.subject);
                         }}
                         className="p-1 rounded text-slate-400 hover:text-rose-500"
                         title="Delete Subject"
@@ -210,6 +210,17 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
           })}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(subjectToDelete)}
+        onClose={() => setSubjectToDelete(null)}
+        onConfirm={() => {
+          if (subjectToDelete) return deleteSubject(subjectToDelete.id);
+        }}
+        title="Delete GATE Subject"
+        message={`Are you sure you want to delete "${subjectToDelete?.name}" and all of its topics?`}
+        confirmLabel="Delete Subject"
+      />
     </div>
   );
 };

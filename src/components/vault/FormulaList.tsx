@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { Flashcard } from '../../types';
-import { Search, Plus, Trash2, Bookmark, CheckCircle2 } from 'lucide-react';
+import { MathText } from '../common/MathText';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { Search, Plus, Trash2 } from 'lucide-react';
 
 interface FormulaListProps {
   selectedSubjectId: string | null;
@@ -11,6 +13,7 @@ interface FormulaListProps {
 export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onOpenAddModal }) => {
   const { flashcards, subjects, toggleFlashcardReview, deleteFlashcard } = useData();
   const [searchQuery, setSearchQuery] = useState('');
+  const [cardToDelete, setCardToDelete] = useState<Flashcard | null>(null);
 
   const subjectMap = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
@@ -98,20 +101,16 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
                   </div>
 
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                    {card.front_prompt}
+                    <MathText text={card.front_prompt} />
                   </h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 whitespace-pre-line mt-2">
-                    {card.back_answer}
-                  </p>
+                  <div className="text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 whitespace-pre-line mt-2 overflow-x-auto">
+                    <MathText text={card.back_answer} />
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-1">
                   <button
-                    onClick={() => {
-                      if (confirm('Delete this formula card?')) {
-                        deleteFlashcard(card.id);
-                      }
-                    }}
+                    onClick={() => setCardToDelete(card)}
                     className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
                     title="Delete"
                   >
@@ -123,6 +122,17 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
           })}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(cardToDelete)}
+        onClose={() => setCardToDelete(null)}
+        onConfirm={() => {
+          if (cardToDelete) return deleteFlashcard(cardToDelete.id);
+        }}
+        title="Delete Formula Card"
+        message={`Delete "${cardToDelete?.front_prompt}" from your Formula Vault?`}
+        confirmLabel="Delete Card"
+      />
     </div>
   );
 };

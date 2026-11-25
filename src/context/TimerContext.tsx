@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { TimerMode, PomodoroPhase } from '../types';
+import { TimerMode, PomodoroPhase, FocusQuality } from '../types';
 import { useData } from './DataContext';
 import { sound } from '../lib/sound';
 
@@ -29,7 +29,7 @@ interface TimerContextType {
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
-  finishSession: () => void;
+  finishSession: (focusQuality?: FocusQuality) => void;
   skipBreak: () => void;
 
   // Formatted helpers
@@ -151,14 +151,14 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const finishSession = () => {
+  const finishSession = (focusQuality: FocusQuality = 'Deep') => {
     setIsRunning(false);
     if (mode === 'Pomodoro') {
       if (phase === 'focus') {
         const secondsSpent = totalDurationSeconds - timeLeftSeconds;
         const minutes = Math.floor(secondsSpent / 60);
         if (minutes >= 1) {
-          logStudySession(selectedSubjectId, selectedTopicId, minutes, 'Pomodoro');
+          logStudySession(selectedSubjectId, selectedTopicId, minutes, 'Pomodoro', focusQuality);
         }
       }
       resetTimer();
@@ -166,7 +166,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Stopwatch mode
       const minutes = Math.floor(elapsedSeconds / 60);
       if (minutes >= 1) {
-        logStudySession(selectedSubjectId, selectedTopicId, minutes, 'Stopwatch');
+        logStudySession(selectedSubjectId, selectedTopicId, minutes, 'Stopwatch', focusQuality);
       }
       setElapsedSeconds(0);
     }

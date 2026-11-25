@@ -87,6 +87,12 @@ export const GateCountdown: React.FC<GateCountdownProps> = ({ compact = false })
             <h2 className="text-base sm:text-lg font-bold text-slate-100 mt-1.5">
               Stay relentless. Every concept mastered compounds.
             </h2>
+            {settings?.secondary_exam_title && settings?.secondary_exam_date && (
+              <p className="text-xs text-indigo-300 mt-1 tabular-nums">
+                Secondary Milestone: <strong>{settings.secondary_exam_title}</strong> in{' '}
+                {Math.max(0, differenceInCalendarDays(parseISO(settings.secondary_exam_date), new Date()))} days
+              </p>
+            )}
           </div>
         </div>
 

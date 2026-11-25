@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { Award, Trash2, Calendar, Target, AlertTriangle } from 'lucide-react';
+import { MockTest } from '../../types';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { Award, Trash2 } from 'lucide-react';
 
 interface TestTableProps {
   onOpenAddTest: () => void;
@@ -8,6 +10,7 @@ interface TestTableProps {
 
 export const TestTable: React.FC<TestTableProps> = ({ onOpenAddTest }) => {
   const { mockTests, subjects, deleteMockTest } = useData();
+  const [testToDelete, setTestToDelete] = useState<MockTest | null>(null);
 
   const subjectMap = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
@@ -113,11 +116,7 @@ export const TestTable: React.FC<TestTableProps> = ({ onOpenAddTest }) => {
 
                     <td className="py-2.5 px-3 text-right whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete test "${t.title}"?`)) {
-                            deleteMockTest(t.id);
-                          }
-                        }}
+                        onClick={() => setTestToDelete(t)}
                         className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
                         title="Delete Test"
                       >
@@ -131,6 +130,17 @@ export const TestTable: React.FC<TestTableProps> = ({ onOpenAddTest }) => {
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(testToDelete)}
+        onClose={() => setTestToDelete(null)}
+        onConfirm={() => {
+          if (testToDelete) return deleteMockTest(testToDelete.id);
+        }}
+        title="Delete Mock Test"
+        message={`Delete "${testToDelete?.title}"?`}
+        confirmLabel="Delete Test"
+      />
     </div>
   );
 };

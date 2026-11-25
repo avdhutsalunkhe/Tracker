@@ -12,19 +12,23 @@ import {
   Moon,
   Clock,
   Trash2,
-  MoreVertical,
-  CheckCircle2
+  Snowflake
 } from 'lucide-react';
 
 export const HabitList: React.FC = () => {
   const {
+    selectedDate,
+    settings,
     selectedDateHabits,
     selectedDateProgress,
     activeStreak,
     toggleHabit,
     addHabit,
     deleteHabit,
+    toggleStreakFreeze,
   } = useData();
+
+  const isFrozenToday = (settings?.streak_freeze_dates || []).includes(selectedDate);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeMenuHabitId, setActiveMenuHabitId] = useState<string | null>(null);
@@ -70,13 +74,29 @@ export const HabitList: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-2xs"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Add Habit</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => toggleStreakFreeze(selectedDate)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+              isFrozenToday
+                ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-600 dark:text-cyan-400'
+                : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+            title="Use planned Rest Day (up to 2/month) to preserve streak"
+          >
+            <Snowflake className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isFrozenToday ? 'Rest Day' : 'Freeze'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Add Habit</span>
+          </button>
+        </div>
       </div>
 
       {/* Habit Items by Time Slot */}
@@ -120,7 +140,7 @@ export const HabitList: React.FC = () => {
                         </div>
 
                         <span
-                          className={`text-xs font-medium truncate transition-all ${completed
+                          className={`text-xs font-medium break-words line-clamp-2 transition-all ${completed
                               ? 'line-through text-slate-400 dark:text-slate-500'
                               : 'text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
                             }`}

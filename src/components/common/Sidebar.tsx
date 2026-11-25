@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
-  FileText
+  FileText,
+  CalendarClock
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -29,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
   const navItems = [
     { to: '/', label: 'Today', icon: CheckSquare },
     { to: '/calendar', label: 'Calendar & Heatmap', icon: CalendarDays },
+    { to: '/timetable', label: 'Daily Timetable', icon: CalendarClock },
     { to: '/gate', label: 'GATE Study', icon: BookOpen },
     { to: '/syllabus', label: 'GATE Syllabus', icon: FileText },
     { to: '/revisions', label: 'Revisions Queue', icon: RotateCcw },
@@ -41,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
 
   return (
     <aside
-      className={`hidden md:flex flex-col justify-between border-r border-lightBorder dark:border-darkBorder bg-white dark:bg-darkCard transition-all duration-300 ease-in-out shrink-0 select-none z-20 ${
+      className={`hidden md:flex flex-col justify-between border-r border-lightBorder dark:border-slate-800 bg-white dark:bg-[#0F172A] transition-all duration-300 ease-in-out shrink-0 select-none z-20 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto ${
         collapsed ? 'w-20' : 'w-64'
       }`}
     >
@@ -58,8 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 font-semibold shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                      ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-[#F1F5F9] font-semibold shadow-sm'
+                      : 'text-slate-600 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F1F5F9] hover:bg-slate-100/70 dark:hover:bg-slate-800/70'
                   } ${collapsed ? 'justify-center px-0' : ''}`
                 }
                 title={collapsed ? item.label : undefined}

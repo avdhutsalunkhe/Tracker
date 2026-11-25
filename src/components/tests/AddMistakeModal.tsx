@@ -2,7 +2,35 @@ import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useData } from '../../context/DataContext';
 import { MistakeCategory } from '../../types';
-import { Plus } from 'lucide-react';
+import { Plus, ImagePlus, X } from 'lucide-react';
+
+async function compressImageToDataUrl(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const maxDim = 900;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
 
 interface AddMistakeModalProps {
   isOpen: boolean;
@@ -17,7 +45,29 @@ export const AddMistakeModal: React.FC<AddMistakeModalProps> = ({ isOpen, onClos
   const [subjectId, setSubjectId] = useState('');
   const [mockTestId, setMockTestId] = useState('');
   const [fixNote, setFixNote] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) {
+          const compressed = await compressImageToDataUrl(blob);
+          setImageUrl(compressed);
+        }
+      }
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImageToDataUrl(file);
+    setImageUrl(compressed);
+  };
 
   const categories: MistakeCategory[] = [
     'Conceptual Gap',
@@ -38,9 +88,11 @@ export const AddMistakeModal: React.FC<AddMistakeModalProps> = ({ isOpen, onClos
         subject_id: subjectId || null,
         mock_test_id: mockTestId || null,
         fix_note: fixNote.trim(),
+        image_url: imageUrl,
       });
       setTitle('');
       setFixNote('');
+      setImageUrl(null);
       onClose();
     } finally {
       setSubmitting(false);
@@ -141,9 +193,40 @@ export const AddMistakeModal: React.FC<AddMistakeModalProps> = ({ isOpen, onClos
             required
             value={fixNote}
             onChange={(e) => setFixNote(e.target.value)}
-            placeholder="What exact principle or check prevents this mistake? (e.g. Always check whether the graph is directed or undirected before applying Handshaking lemma!)"
+            onPaste={handlePaste}
+            placeholder="What exact principle or check prevents this mistake? Supports LaTeX ($...$) and Ctrl+V image paste."
             className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
           />
+        </div>
+
+        {/* Screenshot Paste / Upload */}
+        <div onPaste={handlePaste} className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              PYQ Screenshot (Optional — Paste Ctrl+V or Upload)
+            </label>
+            <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+              <ImagePlus className="w-3.5 h-3.5" />
+              <span>Upload Image</span>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </label>
+          </div>
+          {imageUrl && (
+            <div className="relative inline-block">
+              <img
+                src={imageUrl}
+                alt="Mistake screenshot"
+                className="max-h-36 rounded-xl border border-slate-200 dark:border-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => setImageUrl(null)}
+                className="absolute -top-2 -right-2 p-1 rounded-full bg-rose-600 text-white shadow-sm"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="pt-2 flex justify-end gap-2">

@@ -3,7 +3,9 @@ import { TestScoreChart } from '../components/tests/TestScoreChart';
 import { TestTable } from '../components/tests/TestTable';
 import { TestLoggerModal } from '../components/tests/TestLoggerModal';
 import { MistakeList } from '../components/tests/MistakeList';
-import { Award, AlertTriangle } from 'lucide-react';
+import { MistakeBreakdownChart } from '../components/tests/MistakeBreakdownChart';
+import { PYQMatrix } from '../components/tests/PYQMatrix';
+import { Award } from 'lucide-react';
 
 export const TestsPage: React.FC = () => {
   const [isAddTestOpen, setIsAddTestOpen] = useState(false);
@@ -20,13 +22,19 @@ export const TestsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* 1. Performance Trends Chart */}
-      <TestScoreChart />
+      {/* 1. Performance Trends Chart & Mistake Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <TestScoreChart />
+        <MistakeBreakdownChart />
+      </div>
 
       {/* 2. Mock Test Table */}
       <TestTable onOpenAddTest={() => setIsAddTestOpen(true)} />
 
-      {/* 3. Mistake Notebook */}
+      {/* 3. PYQ Matrix */}
+      <PYQMatrix />
+
+      {/* 4. Mistake Notebook */}
       <MistakeList />
 
       {/* Log Test Modal */}

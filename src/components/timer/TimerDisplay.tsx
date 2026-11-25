@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTimer } from '../../context/TimerContext';
 import { useData } from '../../context/DataContext';
-import { Play, Pause, RotateCcw, Check, SkipForward, Flame, Sparkles } from 'lucide-react';
+import { FocusQuality } from '../../types';
+import { Play, Pause, RotateCcw, Check, SkipForward } from 'lucide-react';
 
 export const TimerDisplay: React.FC = () => {
   const {
@@ -20,6 +21,7 @@ export const TimerDisplay: React.FC = () => {
   } = useTimer();
 
   const { subjects, topics } = useData();
+  const [showQualityPicker, setShowQualityPicker] = useState(false);
 
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
   const selectedTopic = topics.find((t) => t.id === selectedTopicId);
@@ -160,7 +162,7 @@ export const TimerDisplay: React.FC = () => {
           </button>
         ) : (
           <button
-            onClick={finishSession}
+            onClick={() => setShowQualityPicker(true)}
             className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors shadow-2xs"
             title="Finish & Log Study Session"
             aria-label="Finish Session"
@@ -169,6 +171,37 @@ export const TimerDisplay: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* 1-Tap Post-Session Focus Quality Rating */}
+      {showQualityPicker && (
+        <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 w-full max-w-xs text-center space-y-2 animate-in fade-in duration-150">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
+            Rate Focus Quality & Log Session
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(['Deep', 'Average', 'Distracted'] as FocusQuality[]).map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => {
+                  finishSession(q);
+                  setShowQualityPicker(false);
+                }}
+                className="py-1.5 px-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 text-xs font-semibold text-slate-800 dark:text-slate-100"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowQualityPicker(false)}
+            className="text-[11px] text-slate-400 hover:text-slate-600"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 };

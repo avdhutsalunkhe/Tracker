@@ -13,7 +13,8 @@ import {
   Flame,
   ShieldCheck,
   Calendar,
-  FileText
+  FileText,
+  CalendarClock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -31,6 +32,7 @@ export const MoreDrawer: React.FC<MoreDrawerProps> = ({ isOpen, onClose, onOpenA
   if (!isOpen) return null;
 
   const moreLinks = [
+    { to: '/timetable', label: 'Daily Timetable', icon: CalendarClock, desc: 'Fixed routine & auto study allocator' },
     { to: '/syllabus', label: 'GATE 2027 Syllabus', icon: FileText, desc: 'Official CS & DA paper syllabus' },
     { to: '/revisions', label: 'Revisions Queue', icon: RotateCcw, desc: 'Spaced repetition schedule & overdue topics' },
     { to: '/tests', label: 'Tests & Mistakes', icon: Award, desc: 'Mock test scores, accuracy & mistake notebook' },

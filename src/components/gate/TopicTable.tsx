@@ -1,19 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { GateTopic, TopicStatus } from '../../types';
-import {
-  Search,
-  Plus,
-  Star,
-  RotateCcw,
-  BookOpen,
-  Edit2,
-  Trash2,
-  Clock,
-  Filter,
-  CheckCircle2,
-  ChevronRight
-} from 'lucide-react';
+import { Search, Plus, Star, ChevronRight, Clock, BookOpen } from 'lucide-react';
+import { getEffectiveConfidence, isConfidenceDecayed } from '../../utils/topicIntelligence';
 
 interface TopicTableProps {
   selectedSubjectId: string | null;
@@ -24,23 +14,19 @@ interface TopicTableProps {
 export const TopicTable: React.FC<TopicTableProps> = ({
   selectedSubjectId,
   onOpenAddTopic,
-  onEditTopic,
 }) => {
-  const { topics, subjects, updateTopic, deleteTopic, markTopicRevised } = useData();
+  const navigate = useNavigate();
+  const { topics, subjects } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | TopicStatus>('All');
-  const [remarksModalTopic, setRemarksModalTopic] = useState<GateTopic | null>(null);
-  const [remarksInput, setRemarksInput] = useState('');
 
-  // Map of subject id to subject object
   const subjectMap = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
     subjects.forEach((s) => map.set(s.id, { name: s.name, color: s.color }));
     return map;
   }, [subjects]);
 
-  // Filter topics
   const filteredTopics = useMemo(() => {
     return topics.filter((t) => {
       if (selectedSubjectId && t.subject_id !== selectedSubjectId) return false;
@@ -58,42 +44,32 @@ export const TopicTable: React.FC<TopicTableProps> = ({
     });
   }, [topics, selectedSubjectId, statusFilter, searchQuery, subjectMap]);
 
-  const handleStatusChange = (topic: GateTopic, newStatus: TopicStatus) => {
-    updateTopic(topic.id, { status: newStatus });
-  };
-
-  const handleQuickRevision = (topic: GateTopic) => {
-    markTopicRevised(topic.id, 'Quick revision check-off');
-  };
-
   return (
     <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-5 shadow-sm space-y-4">
       {/* Controls Bar: Search + Status Filter + Add Topic Button */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Search Input */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search topics, formulas, or notes..."
+            placeholder="Search topics, subtopics, or notes..."
             className="w-full pl-10 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
-        {/* Filters and Add */}
-        <div className="flex items-center gap-2 flex-wrap justify-between md:justify-end">
-          {/* Status Filter Tabs */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 justify-between lg:justify-end">
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs overflow-x-auto">
             {(['All', 'Completed', 'In Progress', 'Not Started'] as const).map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${statusFilter === st
+                className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${
+                  statusFilter === st
                     ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
-                  }`}
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
               >
                 {st}
               </button>
@@ -102,7 +78,7 @@ export const TopicTable: React.FC<TopicTableProps> = ({
 
           <button
             onClick={() => onOpenAddTopic(selectedSubjectId || undefined)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Topic</span>
@@ -110,167 +86,86 @@ export const TopicTable: React.FC<TopicTableProps> = ({
         </div>
       </div>
 
-      {/* Table / List */}
+      {/* Simple Responsive Card List */}
       {filteredTopics.length === 0 ? (
-        <div className="py-12 text-center text-xs text-slate-500">
+        <div className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+          <BookOpen className="w-7 h-7 mx-auto mb-2 opacity-40" />
           No syllabus topics match the current filter or search criteria.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-3">Topic / Subject</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Confidence</th>
-                <th className="py-3 px-3 text-center">PYQs</th>
-                <th className="py-3 px-3 text-center">Hours</th>
-                <th className="py-3 px-3">Revision</th>
-                <th className="py-3 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {filteredTopics.map((topic) => {
-                const subject = subjectMap.get(topic.subject_id);
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filteredTopics.map((topic) => {
+            const subject = subjectMap.get(topic.subject_id);
 
-                return (
-                  <tr
-                    key={topic.id}
-                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
-                  >
-                    {/* Topic Name & Subject Tag */}
-                    <td className="py-3 px-3 min-w-[200px]">
-                      <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
-                        <span>{topic.topic_name}</span>
-                        {topic.subtopic && (
-                          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                            {topic.subtopic}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {subject && (
-                          <span
-                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                            style={{
-                              backgroundColor: `${subject.color}18`,
-                              color: subject.color,
-                            }}
-                          >
-                            {subject.name}
-                          </span>
-                        )}
-                        {topic.notes && (
-                          <span className="text-[10px] text-slate-400 truncate max-w-[240px]">
-                            {topic.notes}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Status Dropdown */}
-                    <td className="py-3 px-3">
-                      <select
-                        value={topic.status}
-                        onChange={(e) => handleStatusChange(topic, e.target.value as TopicStatus)}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${topic.status === 'Completed'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                            : topic.status === 'In Progress'
-                              ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
-                          }`}
+            return (
+              <button
+                key={topic.id}
+                type="button"
+                onClick={() => navigate(`/gate/topic/${topic.id}`)}
+                className="text-left p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-white dark:hover:bg-slate-800/70 transition-all flex items-center justify-between gap-3 group"
+              >
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  {/* Top: Subject & Status */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {subject && (
+                      <span
+                        className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold"
+                        style={{
+                          backgroundColor: `${subject.color}18`,
+                          color: subject.color,
+                        }}
                       >
-                        <option value="Not Started">Not Started</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </td>
+                        {subject.name}
+                      </span>
+                    )}
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        topic.status === 'Completed'
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : topic.status === 'In Progress'
+                          ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {topic.status}
+                    </span>
+                  </div>
 
-                    {/* Confidence Stars */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            onClick={() => updateTopic(topic.id, { confidence: star })}
-                            className="hover:scale-110 transition-transform"
-                            title={`Set confidence to ${star}/5`}
-                          >
-                            <Star
-                              className={`w-3.5 h-3.5 ${star <= topic.confidence
-                                  ? 'text-amber-400 fill-amber-400'
-                                  : 'text-slate-300 dark:text-slate-600'
-                                }`}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </td>
+                  {/* Topic Title + Subtopic */}
+                  <div className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug break-words">
+                    {topic.topic_name}
+                  </div>
+                  {topic.subtopic && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      {topic.subtopic}
+                    </div>
+                  )}
 
-                    {/* PYQs Solved */}
-                    <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">
-                      {topic.pyqs_solved || 0}
-                    </td>
-
-                    {/* Hours */}
-                    <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">
+                  {/* Bottom Meta */}
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums pt-0.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1">
+                      <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                      {getEffectiveConfidence(topic)}/5
+                    </span>
+                    {isConfidenceDecayed(topic) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                        Decayed
+                      </span>
+                    )}
+                    <span>{topic.pyqs_solved || 0} PYQs</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
                       {topic.study_hours || 0}h
-                    </td>
+                    </span>
+                  </div>
+                </div>
 
-                    {/* Spaced Revision info */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      {topic.status === 'Completed' ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleQuickRevision(topic)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 font-bold text-[10px] transition-colors"
-                            title="Click to check off revision & schedule next"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            Rev #{topic.revision_count || 0}
-                          </button>
-                          {topic.next_revision_date && (
-                            <span className="text-[10px] text-slate-400">
-                              Next: {topic.next_revision_date}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-[10px]">Mark Completed to schedule</span>
-                      )}
-                    </td>
-
-                    {/* Edit / Delete Actions */}
-                    <td className="py-3 px-3 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100">
-                        <button
-                          onClick={() => onEditTopic(topic)}
-                          className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                          title="Edit Topic"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete topic "${topic.topic_name}"?`)) {
-                              deleteTopic(topic.id);
-                            }
-                          }}
-                          className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
-                          title="Delete Topic"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 };
-

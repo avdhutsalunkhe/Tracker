@@ -19,7 +19,8 @@ import {
   Play,
   ArrowRight,
   X,
-  FileText
+  FileText,
+  CalendarClock
 } from 'lucide-react';
 
 interface CommandItem {
@@ -73,6 +74,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     () => [
       { id: 'p-today', title: 'Go to Today Dashboard', icon: CheckSquare, category: 'Navigation', action: () => navigate('/') },
       { id: 'p-cal', title: 'Go to Calendar & Heatmap', icon: Calendar, category: 'Navigation', action: () => navigate('/calendar') },
+      { id: 'p-tt', title: 'Go to Daily Timetable & Auto-Plan', icon: CalendarClock, category: 'Navigation', action: () => navigate('/timetable') },
       { id: 'p-gate', title: 'Go to GATE Study', icon: BookOpen, category: 'Navigation', action: () => navigate('/gate') },
       { id: 'p-syl', title: 'Go to GATE 2027 Syllabus (CS & DA)', icon: FileText, category: 'Navigation', action: () => navigate('/syllabus') },
       { id: 'p-rev', title: 'Go to Revisions Queue', icon: RotateCcw, category: 'Navigation', action: () => navigate('/revisions') },

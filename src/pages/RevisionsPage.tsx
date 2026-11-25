@@ -16,10 +16,10 @@ export const RevisionsPage: React.FC = () => {
       </div>
 
       {/* Motivational Info Card */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900/40 via-slate-900/50 to-indigo-950/40 border border-indigo-500/20 text-xs text-slate-300 flex items-start gap-3">
-        <Brain className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <span className="font-bold text-indigo-200">Active Recall Principle:</span> Every time you review a topic when due, the neural pathways solidify. One-tap "Mark Revised" automatically pushes the next review further out along the exponential retention curve.
+      <div className="p-4 rounded-2xl bg-indigo-50/90 dark:bg-slate-900 border border-indigo-200 dark:border-indigo-500/30 text-xs text-slate-700 dark:text-slate-100 flex items-start gap-3 shadow-2xs">
+        <Brain className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+        <div className="space-y-1 leading-relaxed">
+          <span className="font-bold text-indigo-700 dark:text-indigo-300">Active Recall Principle:</span> Every time you review a topic when due, the neural pathways solidify. One-tap "Mark Revised" automatically pushes the next review further out along the exponential retention curve.
         </div>
       </div>
 

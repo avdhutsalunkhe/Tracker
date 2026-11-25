@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
-import { MistakeCategory } from '../../types';
+import { MistakeCategory, MistakeLog } from '../../types';
 import { AddMistakeModal } from './AddMistakeModal';
+import { MathText } from '../common/MathText';
+import { ConfirmModal } from '../common/ConfirmModal';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,6 +19,7 @@ export const MistakeList: React.FC = () => {
   const { mistakes, subjects, mockTests, toggleMistakeResolved, deleteMistake } = useData();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [mistakeToDelete, setMistakeToDelete] = useState<MistakeLog | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<'All' | MistakeCategory>('All');
   const [showOnlyUnresolved, setShowOnlyUnresolved] = useState(false);
 
@@ -181,8 +184,17 @@ export const MistakeList: React.FC = () => {
                         <span className="font-bold text-indigo-700 dark:text-indigo-400 mr-1.5">
                           Rule to Remember:
                         </span>
-                        <span className="text-slate-700 dark:text-slate-300">{mistake.fix_note}</span>
+                        <span className="text-slate-700 dark:text-slate-300">
+                          <MathText text={mistake.fix_note} />
+                        </span>
                       </div>
+                    )}
+                    {mistake.image_url && (
+                      <img
+                        src={mistake.image_url}
+                        alt="PYQ reference"
+                        className="mt-2 max-h-48 rounded-xl border border-slate-200 dark:border-slate-700"
+                      />
                     )}
                   </div>
 
@@ -201,11 +213,7 @@ export const MistakeList: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => {
-                        if (confirm('Delete this mistake log?')) {
-                          deleteMistake(mistake.id);
-                        }
-                      }}
+                      onClick={() => setMistakeToDelete(mistake)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition-colors"
                       title="Delete"
                     >
@@ -221,6 +229,17 @@ export const MistakeList: React.FC = () => {
 
       {/* Add Modal */}
       <AddMistakeModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+
+      <ConfirmModal
+        isOpen={Boolean(mistakeToDelete)}
+        onClose={() => setMistakeToDelete(null)}
+        onConfirm={() => {
+          if (mistakeToDelete) return deleteMistake(mistakeToDelete.id);
+        }}
+        title="Delete Mistake Entry"
+        message={`Delete "${mistakeToDelete?.title}" from your Mistake Notebook?`}
+        confirmLabel="Delete"
+      />
     </div>
   );
 };

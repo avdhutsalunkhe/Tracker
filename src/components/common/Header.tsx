@@ -2,6 +2,7 @@ import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useTimer } from '../../context/TimerContext';
 import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 import { Link } from 'react-router-dom';
 import {
   Sun,
@@ -10,10 +11,10 @@ import {
   Play,
   Pause,
   Clock,
-  User as UserIcon,
-  LogIn,
   CheckCircle2,
-  Sparkles
+  Cloud,
+  RefreshCw,
+  CloudOff
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
   const { theme, toggleTheme } = useTheme();
   const { isRunning, formattedTime, mode, phase, startTimer, pauseTimer } = useTimer();
   const { user } = useAuth();
+  const { syncStatus } = useData();
 
   return (
     <header className="sticky top-0 z-30 w-full bg-white/80 dark:bg-darkCard/80 backdrop-blur-md border-b border-lightBorder dark:border-darkBorder">
@@ -71,8 +73,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
           </div>
         </div>
 
-        {/* Right Actions: Ctrl+K Search, Theme Toggle, Auth Status */}
+        {/* Right Actions: Sync Pill, Ctrl+K Search, Theme Toggle, Auth Status */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Sync Status Pill */}
+          <div
+            className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+              syncStatus === 'Synced'
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                : syncStatus === 'Syncing...'
+                ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+            }`}
+            title={`Cloud Sync Status: ${syncStatus}`}
+          >
+            {syncStatus === 'Synced' ? (
+              <Cloud className="w-3 h-3" />
+            ) : syncStatus === 'Syncing...' ? (
+              <RefreshCw className="w-3 h-3 animate-spin" />
+            ) : (
+              <CloudOff className="w-3 h-3" />
+            )}
+            <span>{syncStatus}</span>
+          </div>
           {/* Quick Search Trigger */}
           <button
             onClick={onOpenSearch}

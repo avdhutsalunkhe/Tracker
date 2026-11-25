@@ -10,12 +10,14 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
+  ReferenceLine,
 } from 'recharts';
-import { Award, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 export const TestScoreChart: React.FC = () => {
-  const { mockTests } = useData();
+  const { mockTests, settings } = useData();
   const { theme } = useTheme();
+  const targetBenchmark = settings?.target_gate_score ?? 65;
 
   const isDark = theme === 'dark';
 
@@ -82,6 +84,17 @@ export const TestScoreChart: React.FC = () => {
               }}
             />
             <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+            <ReferenceLine
+              y={targetBenchmark}
+              stroke="#F59E0B"
+              strokeDasharray="4 4"
+              label={{
+                value: `Target ${targetBenchmark}%`,
+                fill: '#F59E0B',
+                fontSize: 10,
+                position: 'insideTopRight',
+              }}
+            />
             <Line
               type="monotone"
               dataKey="percentage"

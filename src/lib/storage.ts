@@ -10,6 +10,9 @@ import {
   MockTest,
   MistakeLog,
   Flashcard,
+  TimetableBlock,
+  AllottedSlot,
+  PYQMatrixEntry,
 } from '../types';
 import { DEFAULT_GATE_EXAM_DATE, DEFAULT_DAILY_STUDY_GOAL_HOURS } from './constants';
 
@@ -28,6 +31,9 @@ export interface StorageData {
   mockTests: MockTest[];
   mistakes: MistakeLog[];
   flashcards: Flashcard[];
+  timetableBlocks?: TimetableBlock[];
+  allottedSlots?: AllottedSlot[];
+  pyqMatrix?: PYQMatrixEntry[];
 }
 
 export const getEmptyUserData = (userId: string): StorageData => ({
@@ -37,6 +43,10 @@ export const getEmptyUserData = (userId: string): StorageData => ({
     daily_study_goal_hours: DEFAULT_DAILY_STUDY_GOAL_HOURS,
     pomodoro_focus_mins: 50,
     pomodoro_break_mins: 10,
+    target_gate_score: 65,
+    pre_alert_mins: 5,
+    evening_reminder_time: '20:30',
+    streak_freeze_dates: [],
     updated_at: new Date().toISOString(),
   },
   habits: [],
@@ -49,6 +59,9 @@ export const getEmptyUserData = (userId: string): StorageData => ({
   mockTests: [],
   mistakes: [],
   flashcards: [],
+  timetableBlocks: [],
+  allottedSlots: [],
+  pyqMatrix: [],
 });
 
 export const clearLegacyDemoStorage = (): void => {

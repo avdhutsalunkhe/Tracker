@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useTimer } from '../../context/TimerContext';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Play, RotateCcw, AlertTriangle, ArrowRight, BookOpen, Clock } from 'lucide-react';
-import { format, isPast, parseISO, isToday } from 'date-fns';
+import { Sparkles, Play } from 'lucide-react';
+import { format } from 'date-fns';
+import { computeTopicROIScore, getEffectiveConfidence, isConfidenceDecayed } from '../../utils/topicIntelligence';
 
 export const NextUpCard: React.FC = () => {
   const navigate = useNavigate();
@@ -14,85 +15,57 @@ export const NextUpCard: React.FC = () => {
     if (topics.length === 0) return null;
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const subjectMap = new Map(subjects.map((s) => [s.id, s]));
 
-    // 1. Check for Overdue Revision
-    const overdueTopic = topics.find(
-      (t) => t.status === 'Completed' && t.next_revision_date && t.next_revision_date < todayStr
-    );
-    if (overdueTopic) {
-      const subject = subjects.find((s) => s.id === overdueTopic.subject_id);
+    // Rank all topics by ROI formula: Weightage * (6 - EffectiveConfidence) + OverdueBonus
+    const ranked = [...topics]
+      .map((topic) => {
+        const subject = subjectMap.get(topic.subject_id);
+        const roi = computeTopicROIScore(topic, subject, todayStr);
+        return { topic, subject, roi };
+      })
+      .sort((a, b) => b.roi - a.roi);
+
+    const best = ranked[0];
+    if (!best) return null;
+    const { topic, subject, roi } = best;
+    const effConf = getEffectiveConfidence(topic);
+    const decayed = isConfidenceDecayed(topic);
+
+    if (topic.status === 'Completed' && topic.next_revision_date && topic.next_revision_date < todayStr) {
       return {
-        priorityType: 'Overdue Revision',
         priorityColor: 'text-rose-600 dark:text-rose-400 bg-rose-500/15 border-rose-500/30',
         borderColor: 'border-rose-500/40',
-        badge: 'Top Priority — Overdue',
-        reason: `Revision #${(overdueTopic.revision_count || 0) + 1} was due on ${overdueTopic.next_revision_date}. Retain your edge with an active recall session.`,
-        topic: overdueTopic,
+        badge: `Overdue Revision · ROI ${Math.round(roi)}`,
+        reason: `Revision #${(topic.revision_count || 0) + 1} was due on ${topic.next_revision_date}. High-yield active recall recommended.`,
+        topic,
         subject,
+        decayed,
       };
     }
 
-    // 2. Check for Revision Due Today
-    const dueTodayTopic = topics.find(
-      (t) => t.status === 'Completed' && t.next_revision_date === todayStr
-    );
-    if (dueTodayTopic) {
-      const subject = subjects.find((s) => s.id === dueTodayTopic.subject_id);
+    if (topic.status === 'Completed' && topic.next_revision_date === todayStr) {
       return {
-        priorityType: 'Revision Due Today',
         priorityColor: 'text-amber-600 dark:text-amber-400 bg-amber-500/15 border-amber-500/30',
         borderColor: 'border-amber-500/40',
-        badge: 'Scheduled for Today',
-        reason: `Scheduled Revision #${(dueTodayTopic.revision_count || 0) + 1} per the spaced repetition curve.`,
-        topic: dueTodayTopic,
+        badge: `Due Today · ROI ${Math.round(roi)}`,
+        reason: `Scheduled Revision #${(topic.revision_count || 0) + 1} per the spaced repetition curve.`,
+        topic,
         subject,
+        decayed,
       };
     }
 
-    // 3. Lowest-confidence topic (In Progress or Completed with confidence <= 2)
-    const lowConfidenceTopic = [...topics]
-      .filter((t) => t.status !== 'Not Started' && t.confidence <= 2)
-      .sort((a, b) => a.confidence - b.confidence)[0];
-
-    if (lowConfidenceTopic) {
-      const subject = subjects.find((s) => s.id === lowConfidenceTopic.subject_id);
-      return {
-        priorityType: 'Weakness Booster',
-        priorityColor: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 border-indigo-500/30',
-        borderColor: 'border-indigo-500/40',
-        badge: `Low Confidence (${lowConfidenceTopic.confidence}/5)`,
-        reason: 'You marked this topic as challenging. Solving 10 focused PYQs here yields high score ROI.',
-        topic: lowConfidenceTopic,
-        subject,
-      };
-    }
-
-    // 4. In Progress topic
-    const inProgressTopic = topics.find((t) => t.status === 'In Progress');
-    if (inProgressTopic) {
-      const subject = subjects.find((s) => s.id === inProgressTopic.subject_id);
-      return {
-        priorityType: 'Continue Syllabus',
-        priorityColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
-        borderColor: 'border-emerald-500/40',
-        badge: 'In Progress',
-        reason: 'Pick up right where you left off and complete this core syllabus module.',
-        topic: inProgressTopic,
-        subject,
-      };
-    }
-
-    // 5. Default next topic
-    const anyTopic = topics[0];
-    const subject = subjects.find((s) => s.id === anyTopic.subject_id);
     return {
-      priorityType: 'Recommended Study',
       priorityColor: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 border-indigo-500/30',
       borderColor: 'border-indigo-500/40',
-      badge: anyTopic.status,
-      reason: 'Deep focus study block recommended.',
-      topic: anyTopic,
+      badge: `ROI ${Math.round(roi)} · Conf ${effConf}/5`,
+      reason: decayed
+        ? 'Confidence decayed after 21+ days without revision. Review key concepts and solve PYQs.'
+        : 'Highest expected GATE marks return based on subject weightage and confidence gap.',
+      topic,
       subject,
+      decayed,
     };
   }, [topics, subjects]);
 

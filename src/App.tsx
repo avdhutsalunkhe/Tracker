@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
-import { TimerProvider } from './context/TimerContext';
+import { TimerProvider, useTimer } from './context/TimerContext';
 
 // Components
 import { Header } from './components/common/Header';
@@ -27,13 +27,49 @@ import { VaultPage } from './pages/VaultPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SyllabusPage } from './pages/SyllabusPage';
+import { TopicDetailPage } from './pages/TopicDetailPage';
+import { TimetablePage } from './pages/TimetablePage';
 
 const AppContent: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { isRunning, startTimer, pauseTimer } = useTimer();
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+
+  // Global keyboard-first shortcuts (S: start/pause timer, T: Today, M: Tests & Mistakes)
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!user) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === 's') {
+        e.preventDefault();
+        if (isRunning) pauseTimer();
+        else startTimer();
+      } else if (key === 't') {
+        e.preventDefault();
+        navigate('/');
+      } else if (key === 'm') {
+        e.preventDefault();
+        navigate('/tests');
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [user, isRunning, startTimer, pauseTimer, navigate]);
 
   if (authLoading) {
     return (
@@ -71,7 +107,9 @@ const AppContent: React.FC = () => {
           <Routes>
             <Route path="/" element={<TodayPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/timetable" element={<TimetablePage />} />
             <Route path="/gate" element={<GatePage />} />
+            <Route path="/gate/topic/:topicId" element={<TopicDetailPage />} />
             <Route path="/syllabus" element={<SyllabusPage />} />
             <Route path="/revisions" element={<RevisionsPage />} />
             <Route path="/timer" element={<TimerPage />} />
