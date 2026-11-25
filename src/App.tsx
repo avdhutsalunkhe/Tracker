@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { TimerProvider } from './context/TimerContext';
 
@@ -14,7 +14,7 @@ import { MoreDrawer } from './components/common/MoreDrawer';
 import { CommandPalette } from './components/common/CommandPalette';
 import { ToastContainer } from './components/common/ToastContainer';
 import { AuthModal } from './components/auth/AuthModal';
-import { DemoModeBanner } from './components/auth/DemoModeBanner';
+import { LoginPage } from './components/auth/LoginPage';
 
 // Pages
 import { TodayPage } from './pages/TodayPage';
@@ -28,16 +28,32 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 const AppContent: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-lightBg dark:bg-darkBg text-slate-900 dark:text-slate-100 gap-3">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading Tracker...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <LoginPage />
+        <ToastContainer />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-lightBg dark:bg-darkBg text-slate-900 dark:text-slate-100 transition-colors">
-      {/* Demo / Guest banner */}
-      <DemoModeBanner onOpenAuth={() => setIsAuthOpen(true)} />
-
       {/* Persistent App Header */}
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}

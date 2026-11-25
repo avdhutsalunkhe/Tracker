@@ -163,3 +163,4 @@ export const NextUpCard: React.FC = () => {
     </div>
   );
 };
+

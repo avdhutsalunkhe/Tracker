@@ -138,3 +138,4 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ onSelect
     </div>
   );
 };
+

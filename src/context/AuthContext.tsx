@@ -1,75 +1,56 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clearLegacyDemoStorage } from '../lib/storage';
 import { useToast } from './ToastContext';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  isDemoUser: boolean;
   isConfigured: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  continueAsGuest: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// A virtual demo user for testing/preview when not connected to Supabase
-const DEMO_USER: User = {
-  id: 'demo-gate-aspirant',
-  app_metadata: {},
-  user_metadata: { name: 'GATE Aspirant' },
-  aud: 'authenticated',
-  created_at: new Date().toISOString(),
-  email: 'aspirant@gate-tracker.dev',
-  role: 'authenticated',
-} as User;
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(DEMO_USER);
+  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemoUser, setIsDemoUser] = useState(true);
   const { showToast } = useToast();
 
   useEffect(() => {
+    clearLegacyDemoStorage();
+
     if (!isSupabaseConfigured || !supabase) {
-      setUser(DEMO_USER);
-      setIsDemoUser(true);
+      setUser(null);
+      setSession(null);
       setLoading(false);
       return;
     }
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        setUser(session.user);
-        setIsDemoUser(false);
-      } else {
-        setUser(DEMO_USER);
-        setIsDemoUser(true);
-      }
-      setLoading(false);
-    }).catch((err) => {
-      console.warn('Supabase getSession error:', err);
-      setUser(DEMO_USER);
-      setIsDemoUser(true);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Supabase getSession error:', err);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+      });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session?.user) {
-        setUser(session.user);
-        setIsDemoUser(false);
-      } else {
-        setUser(DEMO_USER);
-        setIsDemoUser(true);
-      }
+      setUser(session?.user ?? null);
       setLoading(false);
     });
 
@@ -80,14 +61,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     if (!isSupabaseConfigured || !supabase) {
+      const err = new Error('Supabase is not configured. Please check your environment variables.');
       showToast({
-        type: 'warning',
-        title: 'Demo Mode Active',
-        message: 'Supabase credentials are not configured yet. Running in offline demo mode.',
+        type: 'error',
+        title: 'Configuration Missing',
+        message: err.message,
       });
-      setUser(DEMO_USER);
-      setIsDemoUser(true);
-      return { error: null };
+      return { error: err };
     }
 
     try {
@@ -95,7 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       setUser(data.user);
       setSession(data.session);
-      setIsDemoUser(false);
       showToast({
         type: 'success',
         title: 'Signed in successfully',
@@ -115,16 +94,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     if (!isSupabaseConfigured || !supabase) {
+      const err = new Error('Supabase is not configured. Please check your environment variables.');
       showToast({
-        type: 'warning',
-        title: 'Demo Mode Active',
-        message: 'Supabase is not configured yet. Sign up works in real cloud mode once keys are set.',
+        type: 'error',
+        title: 'Configuration Missing',
+        message: err.message,
       });
-      return { error: null };
+      return { error: err };
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
+      });
       if (error) throw error;
       if (data.user && !data.session) {
         showToast({
@@ -135,7 +121,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (data.user) {
         setUser(data.user);
         setSession(data.session);
-        setIsDemoUser(false);
         showToast({
           type: 'success',
           title: 'Account Created',
@@ -158,20 +143,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut().catch(() => {});
     }
-    setUser(DEMO_USER);
+    setUser(null);
     setSession(null);
-    setIsDemoUser(true);
     showToast({
       type: 'info',
       title: 'Signed Out',
-      message: 'You are now in local demo mode.',
+      message: 'You have been signed out of Tracker.',
     });
-  };
-
-  const continueAsGuest = () => {
-    setUser(DEMO_USER);
-    setSession(null);
-    setIsDemoUser(true);
   };
 
   return (
@@ -180,12 +158,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         session,
         loading,
-        isDemoUser,
         isConfigured: isSupabaseConfigured,
         signIn,
         signUp,
         signOut,
-        continueAsGuest,
       }}
     >
       {children}

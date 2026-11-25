@@ -267,3 +267,4 @@ export const DayDrawer: React.FC<DayDrawerProps> = ({ date, onClose, onOpenAddTo
     </div>
   );
 };
+

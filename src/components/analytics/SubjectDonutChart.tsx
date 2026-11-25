@@ -96,3 +96,4 @@ export const SubjectDonutChart: React.FC = () => {
     </div>
   );
 };
+

@@ -101,3 +101,4 @@ export const StudyBarChart: React.FC = () => {
     </div>
   );
 };
+

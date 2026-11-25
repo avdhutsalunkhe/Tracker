@@ -30,22 +30,20 @@ export const VaultPage: React.FC = () => {
         <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
           <button
             onClick={() => setActiveTab('flashcards')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${
-              activeTab === 'flashcards'
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${activeTab === 'flashcards'
                 ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
                 : 'text-slate-500 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Flashcards</span>
           </button>
           <button
             onClick={() => setActiveTab('list')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${
-              activeTab === 'list'
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${activeTab === 'list'
                 ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
                 : 'text-slate-500 hover:text-slate-900'
-            }`}
+              }`}
           >
             <List className="w-3.5 h-3.5" />
             <span>Formula Table</span>
@@ -58,11 +56,10 @@ export const VaultPage: React.FC = () => {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setSelectedSubjectId(null)}
-            className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-colors ${
-              selectedSubjectId === null
+            className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-colors ${selectedSubjectId === null
                 ? 'bg-indigo-600 text-white'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-            }`}
+              }`}
           >
             All Subjects
           </button>
@@ -70,11 +67,10 @@ export const VaultPage: React.FC = () => {
             <button
               key={s.id}
               onClick={() => setSelectedSubjectId(s.id === selectedSubjectId ? null : s.id)}
-              className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-colors ${
-                selectedSubjectId === s.id
+              className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-colors ${selectedSubjectId === s.id
                   ? 'bg-indigo-600 text-white'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-              }`}
+                }`}
             >
               {s.name}
             </button>
@@ -116,3 +112,4 @@ export const VaultPage: React.FC = () => {
     </div>
   );
 };
+

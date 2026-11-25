@@ -15,7 +15,7 @@ class SoundEffects {
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+      this.ctx.resume().catch(() => { });
     }
     return this.ctx;
   }
@@ -90,3 +90,4 @@ class SoundEffects {
 }
 
 export const sound = new SoundEffects();
+

@@ -38,9 +38,8 @@ export const TimerDisplay: React.FC = () => {
       {/* Background ambient glow when active */}
       {isRunning && (
         <div
-          className={`absolute inset-0 opacity-10 pointer-events-none blur-3xl transition-all duration-700 ${
-            isBreak ? 'bg-emerald-500' : 'bg-indigo-600'
-          }`}
+          className={`absolute inset-0 opacity-10 pointer-events-none blur-3xl transition-all duration-700 ${isBreak ? 'bg-emerald-500' : 'bg-indigo-600'
+            }`}
         />
       )}
 
@@ -81,13 +80,12 @@ export const TimerDisplay: React.FC = () => {
           />
           {/* Progress Arc */}
           <circle
-            className={`transition-all duration-700 ease-out ${
-              isBreak
+            className={`transition-all duration-700 ease-out ${isBreak
                 ? 'text-emerald-500'
                 : isRunning
-                ? 'text-indigo-600 dark:text-indigo-500'
-                : 'text-indigo-400 dark:text-indigo-600'
-            }`}
+                  ? 'text-indigo-600 dark:text-indigo-500'
+                  : 'text-indigo-400 dark:text-indigo-600'
+              }`}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -106,11 +104,10 @@ export const TimerDisplay: React.FC = () => {
             {formattedTime}
           </span>
           <span
-            className={`text-xs font-bold uppercase tracking-wider mt-1 px-2.5 py-0.5 rounded-full ${
-              isBreak
+            className={`text-xs font-bold uppercase tracking-wider mt-1 px-2.5 py-0.5 rounded-full ${isBreak
                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                 : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
-            }`}
+              }`}
           >
             {mode === 'Pomodoro'
               ? phase === 'focus'
@@ -134,11 +131,10 @@ export const TimerDisplay: React.FC = () => {
 
         <button
           onClick={isRunning ? pauseTimer : startTimer}
-          className={`flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl text-white font-bold text-sm shadow-md transition-all transform hover:scale-105 active:scale-95 ${
-            isBreak
+          className={`flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl text-white font-bold text-sm shadow-md transition-all transform hover:scale-105 active:scale-95 ${isBreak
               ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
               : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
-          }`}
+            }`}
         >
           {isRunning ? (
             <>
@@ -176,3 +172,4 @@ export const TimerDisplay: React.FC = () => {
     </div>
   );
 };
+

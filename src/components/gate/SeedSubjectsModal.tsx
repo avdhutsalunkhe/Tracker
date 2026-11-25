@@ -42,11 +42,10 @@ export const SeedSubjectsModal: React.FC<SeedSubjectsModalProps> = ({ isOpen, on
                 <div
                   key={preset.branchName}
                   onClick={() => setSelectedBranch(preset.branchName)}
-                  className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${isSelected
+                    ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
                 >
                   <div className="flex items-center justify-between font-bold">
                     <span>{preset.branchName}</span>
@@ -88,3 +87,4 @@ export const SeedSubjectsModal: React.FC<SeedSubjectsModalProps> = ({ isOpen, on
     </Modal>
   );
 };
+

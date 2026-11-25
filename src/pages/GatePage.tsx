@@ -108,3 +108,4 @@ export const GatePage: React.FC = () => {
     </div>
   );
 };
+

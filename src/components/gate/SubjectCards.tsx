@@ -63,11 +63,10 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
         <div className="flex items-center gap-2 self-stretch sm:self-auto">
           <button
             onClick={() => onSelectSubject(null)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              selectedSubjectId === null
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${selectedSubjectId === null
                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-            }`}
+              }`}
           >
             All Subjects ({topics.length})
           </button>
@@ -123,11 +122,10 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
               <div
                 key={item.subject.id}
                 onClick={() => onSelectSubject(isSelected ? null : item.subject.id)}
-                className={`group p-4 rounded-2xl border transition-all cursor-pointer relative select-none flex flex-col justify-between ${
-                  isSelected
+                className={`group p-4 rounded-2xl border transition-all cursor-pointer relative select-none flex flex-col justify-between ${isSelected
                     ? 'ring-2 ring-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-400 dark:border-indigo-600 shadow-sm'
                     : 'bg-white dark:bg-darkCard border-lightBorder dark:border-darkBorder hover:border-indigo-400/60 dark:hover:border-indigo-500/60'
-                }`}
+                  }`}
               >
                 <div>
                   {/* Subject Name & Actions */}
@@ -215,3 +213,4 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
     </div>
   );
 };
+

@@ -88,11 +88,10 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
 
                     <button
                       onClick={() => toggleFlashcardReview(card.id)}
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
-                        card.needs_review
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${card.needs_review
                           ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
                           : 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-                      }`}
+                        }`}
                     >
                       {card.needs_review ? 'Needs Review' : 'Mastered'}
                     </button>
@@ -127,3 +126,4 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
     </div>
   );
 };
+

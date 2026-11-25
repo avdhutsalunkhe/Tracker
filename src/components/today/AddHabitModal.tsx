@@ -72,11 +72,10 @@ export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, o
                   type="button"
                   key={item.slot}
                   onClick={() => setTimeSlot(item.slot)}
-                  className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                    isSelected
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-semibold transition-all ${isSelected
                       ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-xs'
                       : 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   <Icon className="w-4 h-4 mb-1 text-indigo-500" />
                   <span>{item.label}</span>
@@ -107,3 +106,4 @@ export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, o
     </Modal>
   );
 };
+

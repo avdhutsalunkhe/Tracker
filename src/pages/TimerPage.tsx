@@ -32,3 +32,4 @@ export const TimerPage: React.FC = () => {
     </div>
   );
 };
+

@@ -108,3 +108,4 @@ export const AddCardModal: React.FC<AddCardModalProps> = ({ isOpen, onClose, def
     </Modal>
   );
 };
+

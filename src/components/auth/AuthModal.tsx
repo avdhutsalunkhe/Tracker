@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, LogIn, UserPlus, AlertCircle, Sparkles } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { signIn, signUp, continueAsGuest, isConfigured } = useAuth();
+  const { signIn, signUp, user, signOut } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -35,28 +35,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     try {
       if (mode === 'signin') {
         const { error } = await signIn(email.trim(), password);
-        if (error) {
-          setErrorMsg(error.message);
-        } else {
-          onClose();
-        }
+        if (error) setErrorMsg(error.message);
+        else onClose();
       } else {
         const { error } = await signUp(email.trim(), password);
-        if (error) {
-          setErrorMsg(error.message);
-        } else {
-          onClose();
-        }
+        if (error) setErrorMsg(error.message);
+        else onClose();
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGuest = () => {
-    continueAsGuest();
-    onClose();
-  };
+  if (user) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Account"
+        subtitle="Signed in to Tracker with Supabase Cloud Sync."
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
+            <div className="text-slate-500 dark:text-slate-400">Signed in as</div>
+            <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">{user.email}</div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              onClose();
+            }}
+            className="w-full py-2.5 px-4 rounded-xl border border-rose-300 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-semibold text-sm hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -65,15 +82,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       title={mode === 'signin' ? 'Sign In to Tracker' : 'Create Tracker Account'}
       subtitle="Sync your daily habits, study hours, and GATE progress securely across all your devices."
     >
-      {!isConfigured && (
-        <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
-          <div>
-            <span className="font-semibold">Offline Demo Mode Active:</span> Supabase keys are not set yet. You can explore all features using local browser persistence, or add your Supabase credentials to <code className="px-1 py-0.5 bg-black/10 dark:bg-white/10 rounded">.env</code> to enable cloud sync.
-          </div>
-        </div>
-      )}
-
       {errorMsg && (
         <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -135,7 +143,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         </button>
       </form>
 
-      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
         <button
           type="button"
           onClick={() => {
@@ -145,14 +153,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
         >
           {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleGuest}
-          className="flex items-center gap-1 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Use Demo / Guest
         </button>
       </div>
     </Modal>

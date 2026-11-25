@@ -22,3 +22,4 @@ export const CalendarPage: React.FC = () => {
     </div>
   );
 };
+

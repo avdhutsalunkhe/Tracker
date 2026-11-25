@@ -24,7 +24,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
   const { theme, toggleTheme } = useTheme();
   const { isRunning, formattedTime, mode, phase, startTimer, pauseTimer } = useTimer();
-  const { user, isDemoUser } = useAuth();
+  const { user } = useAuth();
 
   return (
     <header className="sticky top-0 z-30 w-full bg-white/80 dark:bg-darkCard/80 backdrop-blur-md border-b border-lightBorder dark:border-darkBorder">
@@ -112,20 +112,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
             onClick={onOpenAuth}
             className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-sm transition-colors"
           >
-            {isDemoUser ? (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span className="hidden sm:inline">Guest / Demo</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline truncate max-w-[100px]">{user?.email?.split('@')[0]}</span>
-              </>
-            )}
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="hidden sm:inline truncate max-w-[120px]">
+              {user?.email?.split('@')[0] || 'Account'}
+            </span>
           </button>
         </div>
       </div>
     </header>
   );
 };
+

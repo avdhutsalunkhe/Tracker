@@ -20,7 +20,7 @@ import {
 
 export const SettingsPage: React.FC = () => {
   const { settings, updateSettings, habits, reorderHabits, deleteHabit, exportData } = useData();
-  const { user, isDemoUser, isConfigured, signOut } = useAuth();
+  const { user, isConfigured, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const [examDate, setExamDate] = useState(settings?.gate_exam_date || '2027-02-06');
@@ -258,19 +258,19 @@ export const SettingsPage: React.FC = () => {
             <span className="font-semibold text-slate-700 dark:text-slate-300">Connection Status:</span>
             <span className="font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              {isConfigured ? 'Supabase Connected' : 'Local Offline Demo Store'}
+              {isConfigured ? 'Supabase Connected' : 'Not Configured'}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
             <span className="font-semibold text-slate-700 dark:text-slate-300">Logged in as:</span>
             <span className="text-slate-600 dark:text-slate-400 font-mono">
-              {isDemoUser ? 'Guest User (Offline Store)' : user?.email}
+              {user?.email || 'Not signed in'}
             </span>
           </div>
         </div>
 
-        {!isDemoUser && (
+        {user && (
           <div className="pt-2 flex justify-end">
             <button
               onClick={signOut}
@@ -284,3 +284,4 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
+

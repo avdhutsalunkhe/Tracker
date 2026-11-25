@@ -74,3 +74,4 @@ export const SessionLogHistory: React.FC = () => {
     </div>
   );
 };
+

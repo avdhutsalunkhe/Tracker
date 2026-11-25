@@ -46,11 +46,10 @@ export const ModeSelector: React.FC = () => {
             type="button"
             disabled={isRunning}
             onClick={() => setMode('Pomodoro')}
-            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-              mode === 'Pomodoro'
-                ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-            } disabled:opacity-60`}
+            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${mode === 'Pomodoro'
+              ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+              } disabled:opacity-60`}
           >
             <Clock className="w-3.5 h-3.5" />
             <span>Pomodoro Interval</span>
@@ -60,11 +59,10 @@ export const ModeSelector: React.FC = () => {
             type="button"
             disabled={isRunning}
             onClick={() => setMode('Stopwatch')}
-            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-              mode === 'Stopwatch'
-                ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-            } disabled:opacity-60`}
+            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${mode === 'Stopwatch'
+              ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+              } disabled:opacity-60`}
           >
             <Timer className="w-3.5 h-3.5" />
             <span>Deep Stopwatch</span>
@@ -90,11 +88,10 @@ export const ModeSelector: React.FC = () => {
                     setFocusMinutes(p.focus);
                     setBreakMinutes(p.breakMins);
                   }}
-                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                    isSelected
-                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
-                  } disabled:opacity-60`}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${isSelected
+                    ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                    } disabled:opacity-60`}
                 >
                   {p.label} mins
                 </button>
@@ -150,3 +147,4 @@ export const ModeSelector: React.FC = () => {
     </div>
   );
 };
+

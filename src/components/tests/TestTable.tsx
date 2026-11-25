@@ -90,13 +90,12 @@ export const TestTable: React.FC<TestTableProps> = ({ onOpenAddTest }) => {
 
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <span
-                        className={`font-semibold px-2 py-0.5 rounded-full ${
-                          accuracy >= 80
+                        className={`font-semibold px-2 py-0.5 rounded-full ${accuracy >= 80
                             ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                             : accuracy >= 65
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                        }`}
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                          }`}
                       >
                         {accuracy}%
                       </span>
@@ -135,3 +134,4 @@ export const TestTable: React.FC<TestTableProps> = ({ onOpenAddTest }) => {
     </div>
   );
 };
+

@@ -89,11 +89,10 @@ export const TopicTable: React.FC<TopicTableProps> = ({
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  statusFilter === st
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${statusFilter === st
                     ? 'bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
-                }`}
+                  }`}
               >
                 {st}
               </button>
@@ -168,13 +167,12 @@ export const TopicTable: React.FC<TopicTableProps> = ({
                       <select
                         value={topic.status}
                         onChange={(e) => handleStatusChange(topic, e.target.value as TopicStatus)}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
-                          topic.status === 'Completed'
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${topic.status === 'Completed'
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                             : topic.status === 'In Progress'
-                            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
-                        }`}
+                              ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                          }`}
                       >
                         <option value="Not Started">Not Started</option>
                         <option value="In Progress">In Progress</option>
@@ -193,11 +191,10 @@ export const TopicTable: React.FC<TopicTableProps> = ({
                             title={`Set confidence to ${star}/5`}
                           >
                             <Star
-                              className={`w-3.5 h-3.5 ${
-                                star <= topic.confidence
+                              className={`w-3.5 h-3.5 ${star <= topic.confidence
                                   ? 'text-amber-400 fill-amber-400'
                                   : 'text-slate-300 dark:text-slate-600'
-                              }`}
+                                }`}
                             />
                           </button>
                         ))}
@@ -270,3 +267,4 @@ export const TopicTable: React.FC<TopicTableProps> = ({
     </div>
   );
 };
+

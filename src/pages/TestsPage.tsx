@@ -34,3 +34,4 @@ export const TestsPage: React.FC = () => {
     </div>
   );
 };
+

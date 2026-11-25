@@ -100,3 +100,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
     </aside>
   );
 };
+

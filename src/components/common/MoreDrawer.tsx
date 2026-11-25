@@ -24,7 +24,7 @@ interface MoreDrawerProps {
 }
 
 export const MoreDrawer: React.FC<MoreDrawerProps> = ({ isOpen, onClose, onOpenAuth }) => {
-  const { user, isDemoUser, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { activeStreak, exportData } = useData();
 
   if (!isOpen) return null;
@@ -106,7 +106,7 @@ export const MoreDrawer: React.FC<MoreDrawerProps> = ({ isOpen, onClose, onOpenA
             </button>
           </div>
 
-          {isDemoUser ? (
+          {!user ? (
             <button
               onClick={() => {
                 onClose();
@@ -132,3 +132,4 @@ export const MoreDrawer: React.FC<MoreDrawerProps> = ({ isOpen, onClose, onOpenA
     </div>
   );
 };
+

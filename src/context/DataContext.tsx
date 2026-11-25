@@ -22,7 +22,7 @@ import {
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { loadStoredData, saveStoredData, StorageData } from '../lib/storage';
+import { loadStoredData, saveStoredData, getEmptyUserData, StorageData } from '../lib/storage';
 import { SPACED_REPETITION_INTERVALS, GATE_BRANCH_PRESETS } from '../lib/constants';
 import { sound } from '../lib/sound';
 import { format, addDays, parseISO, differenceInCalendarDays, subDays } from 'date-fns';
@@ -106,20 +106,26 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isDemoUser } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
 
-  // Data State
-  const [data, setData] = useState<StorageData>(() => loadStoredData(user?.id || 'demo-user'));
+  // Data State (starts empty until authenticated user loads)
+  const [data, setData] = useState<StorageData>(() => getEmptyUserData(user?.id || ''));
 
   // Sync / Load on user change
   useEffect(() => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id;
 
-    if (isDemoUser || !isSupabaseConfigured || !supabase) {
+    if (!currentUserId) {
+      setData(getEmptyUserData(''));
+      setLoading(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
       const offlineData = loadStoredData(currentUserId);
       setData(offlineData);
       setLoading(false);
@@ -199,12 +205,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     fetchCloudData();
-  }, [user?.id, isDemoUser]);
+  }, [user?.id]);
 
   // Persist local store whenever state changes (offline capability)
   useEffect(() => {
-    const currentUserId = user?.id || 'demo-user';
-    saveStoredData(currentUserId, data);
+    if (user?.id) {
+      saveStoredData(user.id, data);
+    }
   }, [data, user?.id]);
 
   // Date Navigation
@@ -296,7 +303,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // =========================================================================
   const toggleHabit = async (habitId: string, targetDate?: string) => {
     const dateToUse = targetDate || selectedDate;
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
 
     const existingLog = data.habitLogs.find(
       (l) => l.habit_id === habitId && l.log_date === dateToUse
@@ -332,7 +339,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, habitLogs: updatedLogs }));
 
     // Sync to Supabase if connected
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         if (existingLog) {
           const { error } = await supabase
@@ -364,7 +371,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addHabit = async (title: string, time_slot: HabitTimeSlot) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newHabit: DailyHabit = {
       id: `habit-${Date.now()}`,
       user_id: currentUserId,
@@ -379,7 +386,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, habits: [...prev.habits, newHabit] }));
     showToast({ type: 'success', title: 'Habit Added', message: `"${newHabit.title}" added to daily routine.` });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('daily_habits').insert({
           user_id: currentUserId,
@@ -410,7 +417,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       habits: prev.habits.map((h) => (h.id === id ? { ...h, ...updates } : h)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('daily_habits').update(updates).eq('id', id);
         if (error) throw error;
@@ -433,7 +440,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
     showToast({ type: 'info', title: 'Habit Removed' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('daily_habits').delete().eq('id', id);
         if (error) throw error;
@@ -449,7 +456,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = reordered.map((h, idx) => ({ ...h, sort_order: idx + 1 }));
     setData((prev) => ({ ...prev, habits: updated }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         for (const item of updated) {
           await supabase.from('daily_habits').update({ sort_order: item.sort_order }).eq('id', item.id);
@@ -464,7 +471,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ACTIONS: DAILY TASKS
   // =========================================================================
   const addTask = async (title: string, priority: PriorityLevel, date?: string) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const targetDate = date || selectedDate;
     const newTask: DailyTask = {
       id: `task-${Date.now()}`,
@@ -480,7 +487,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
     showToast({ type: 'success', title: 'Task Added', message: `"${newTask.title}" for ${targetDate}` });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('daily_tasks').insert({
           user_id: currentUserId,
@@ -517,7 +524,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, completed: willBeCompleted } : t)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
           .from('daily_tasks')
@@ -537,7 +544,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== taskId) }));
     showToast({ type: 'info', title: 'Task Deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('daily_tasks').delete().eq('id', taskId);
         if (error) throw error;
@@ -553,7 +560,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ACTIONS: SUBJECTS
   // =========================================================================
   const addSubject = async (name: string, color: string): Promise<string | null> => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newSubject: GateSubject = {
       id: `subj-${Date.now()}`,
       user_id: currentUserId,
@@ -566,7 +573,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, subjects: [...prev.subjects, newSubject] }));
     showToast({ type: 'success', title: 'Subject Created', message: name });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('gate_subjects').insert({
           user_id: currentUserId,
@@ -598,7 +605,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subjects: prev.subjects.map((s) => (s.id === id ? { ...s, name: name.trim(), color } : s)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
           .from('gate_subjects')
@@ -624,7 +631,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
     showToast({ type: 'info', title: 'Subject and associated topics deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('gate_subjects').delete().eq('id', id);
         if (error) throw error;
@@ -637,7 +644,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const seedPresetSubjects = async (branchName?: string) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const preset = GATE_BRANCH_PRESETS.find((p) => p.branchName === branchName) || GATE_BRANCH_PRESETS[0];
 
     const newSubjects: GateSubject[] = [];
@@ -684,7 +691,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       message: `Loaded ${newSubjects.length} subjects and ${newTopics.length} syllabus topics for ${preset.branchName}.`,
     });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         for (const subj of newSubjects) {
           const { data: insertedSubj, error: sErr } = await supabase.from('gate_subjects').insert({
@@ -719,7 +726,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTopic = async (
     topicData: Omit<GateTopic, 'id' | 'user_id' | 'revision_count' | 'next_revision_date'> & { next_revision_date?: string | null }
   ) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
 
     // Calculate next revision date if completed and not provided
     let calculatedNextRevision: string | null = topicData.next_revision_date || null;
@@ -740,7 +747,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, topics: [newTopic, ...prev.topics] }));
     showToast({ type: 'success', title: 'Topic Logged', message: newTopic.topic_name });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('gate_topics').insert({
           user_id: currentUserId,
@@ -789,7 +796,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       topics: prev.topics.map((t) => (t.id === id ? { ...t, ...updatedFields } : t)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('gate_topics').update(updatedFields).eq('id', id);
         if (error) throw error;
@@ -812,7 +819,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
     showToast({ type: 'info', title: 'Topic Deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('gate_topics').delete().eq('id', id);
         if (error) throw error;
@@ -831,7 +838,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const topic = data.topics.find((t) => t.id === topicId);
     if (!topic) return;
 
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newRevCount = (topic.revision_count || 0) + 1;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -880,7 +887,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       message: `Next revision scheduled for ${nextDate}`,
     });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const [revRes, topRes] = await Promise.all([
           supabase.from('gate_revisions').insert({
@@ -917,7 +924,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     if (durationMinutes < 1) return;
 
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const additionalHours = Math.round((durationMinutes / 60) * 10) / 10;
 
@@ -957,7 +964,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       message: `${durationMinutes}m ${mode} added to today's focus hours.`,
     });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error: sessErr } = await supabase.from('study_sessions').insert({
           user_id: currentUserId,
@@ -993,7 +1000,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ACTIONS: MOCK TESTS & MISTAKES
   // =========================================================================
   const addMockTest = async (testData: Omit<MockTest, 'id' | 'user_id' | 'created_at'>) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newTest: MockTest = {
       ...testData,
       id: `test-${Date.now()}`,
@@ -1005,7 +1012,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, mockTests: [newTest, ...prev.mockTests] }));
     showToast({ type: 'success', title: 'Mock Test Logged', message: `${newTest.title}: ${newTest.marks_scored}/${newTest.total_marks}` });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('mock_tests').insert({
           user_id: currentUserId,
@@ -1041,7 +1048,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, mockTests: prev.mockTests.filter((t) => t.id !== testId) }));
     showToast({ type: 'info', title: 'Mock Test Deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('mock_tests').delete().eq('id', testId);
         if (error) throw error;
@@ -1054,7 +1061,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addMistake = async (mistakeData: Omit<MistakeLog, 'id' | 'user_id' | 'is_resolved' | 'created_at'>) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newMistake: MistakeLog = {
       ...mistakeData,
       id: `mistake-${Date.now()}`,
@@ -1067,7 +1074,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, mistakes: [newMistake, ...prev.mistakes] }));
     showToast({ type: 'success', title: 'Mistake Added to Notebook' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('mistake_logs').insert({
           user_id: currentUserId,
@@ -1106,7 +1113,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mistakes: prev.mistakes.map((m) => (m.id === id ? { ...m, is_resolved: willBeResolved } : m)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
           .from('mistake_logs')
@@ -1126,7 +1133,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, mistakes: prev.mistakes.filter((m) => m.id !== id) }));
     showToast({ type: 'info', title: 'Mistake Deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('mistake_logs').delete().eq('id', id);
         if (error) throw error;
@@ -1142,7 +1149,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ACTIONS: FLASHCARDS
   // =========================================================================
   const addFlashcard = async (subjectId: string | null, frontPrompt: string, backAnswer: string) => {
-    const currentUserId = user?.id || 'demo-user';
+    const currentUserId = user?.id || '';
     const newCard: Flashcard = {
       id: `fc-${Date.now()}`,
       user_id: currentUserId,
@@ -1157,7 +1164,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, flashcards: [newCard, ...prev.flashcards] }));
     showToast({ type: 'success', title: 'Flashcard Added to Vault' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('flashcards').insert({
           user_id: currentUserId,
@@ -1192,7 +1199,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       flashcards: prev.flashcards.map((c) => (c.id === id ? { ...c, needs_review: willNeedReview } : c)),
     }));
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
           .from('flashcards')
@@ -1212,7 +1219,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, flashcards: prev.flashcards.filter((c) => c.id !== id) }));
     showToast({ type: 'info', title: 'Flashcard Deleted' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase) {
+    if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.from('flashcards').delete().eq('id', id);
         if (error) throw error;
@@ -1233,7 +1240,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData((prev) => ({ ...prev, settings: updated }));
     showToast({ type: 'success', title: 'Settings Saved' });
 
-    if (!isDemoUser && isSupabaseConfigured && supabase && user?.id) {
+    if (user?.id && isSupabaseConfigured && supabase && user?.id) {
       try {
         const { error } = await supabase.from('user_settings').upsert({
           user_id: user.id,

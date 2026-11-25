@@ -125,3 +125,4 @@ export const GateCountdown: React.FC<GateCountdownProps> = ({ compact = false })
     </div>
   );
 };
+

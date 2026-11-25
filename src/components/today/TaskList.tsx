@@ -63,30 +63,27 @@ export const TaskList: React.FC = () => {
             <div
               key={task.id}
               onClick={() => toggleTask(task.id)}
-              className={`group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                task.completed
+              className={`group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${task.completed
                   ? 'bg-slate-50/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800/60 opacity-80'
                   : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 hover:border-indigo-400/60'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3 min-w-0 pr-2">
                 {/* Checkbox */}
                 <div
-                  className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 ${
-                    task.completed
+                  className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 ${task.completed
                       ? 'bg-emerald-500 text-white'
                       : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-indigo-500'
-                  }`}
+                    }`}
                 >
                   {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
 
                 <span
-                  className={`text-xs font-medium truncate ${
-                    task.completed
+                  className={`text-xs font-medium truncate ${task.completed
                       ? 'line-through text-slate-400 dark:text-slate-500'
                       : 'text-slate-800 dark:text-slate-200'
-                  }`}
+                    }`}
                 >
                   {task.title}
                 </span>
@@ -126,3 +123,4 @@ export const TaskList: React.FC = () => {
     </div>
   );
 };
+

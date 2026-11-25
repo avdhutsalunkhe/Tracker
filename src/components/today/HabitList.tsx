@@ -103,30 +103,27 @@ export const HabitList: React.FC = () => {
                     <div
                       key={habit.id}
                       onClick={() => toggleHabit(habit.id)}
-                      className={`group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                        completed
+                      className={`group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${completed
                           ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30'
                           : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-indigo-400/50 dark:hover:border-indigo-500/50'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
                         {/* Checkbox button */}
                         <div
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
-                            completed
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${completed
                               ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30 scale-105'
                               : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-indigo-500'
-                          }`}
+                            }`}
                         >
                           {completed && <Check className="w-4 h-4 stroke-[3]" />}
                         </div>
 
                         <span
-                          className={`text-xs font-medium truncate transition-all ${
-                            completed
+                          className={`text-xs font-medium truncate transition-all ${completed
                               ? 'line-through text-slate-400 dark:text-slate-500'
                               : 'text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
-                          }`}
+                            }`}
                         >
                           {habit.title}
                         </span>
@@ -161,3 +158,4 @@ export const HabitList: React.FC = () => {
     </div>
   );
 };
+

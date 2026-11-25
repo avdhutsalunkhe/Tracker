@@ -127,13 +127,12 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
                   type="button"
                   key={s}
                   onClick={() => setStatus(s)}
-                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                    isSelected
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${isSelected
                       ? s === 'Completed'
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
                         : 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
                       : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}
+                    }`}
                 >
                   {s}
                 </button>
@@ -156,11 +155,10 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
                 className="p-1 rounded-lg hover:scale-110 transition-transform"
               >
                 <Star
-                  className={`w-6 h-6 ${
-                    star <= confidence
+                  className={`w-6 h-6 ${star <= confidence
                       ? 'text-amber-400 fill-amber-400'
                       : 'text-slate-300 dark:text-slate-600'
-                  }`}
+                    }`}
                 />
               </button>
             ))}
@@ -168,12 +166,12 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
               {confidence === 5
                 ? 'Mastered'
                 : confidence === 4
-                ? 'Strong'
-                : confidence === 3
-                ? 'Moderate'
-                : confidence === 2
-                ? 'Shaky'
-                : 'Need Basics'}
+                  ? 'Strong'
+                  : confidence === 3
+                    ? 'Moderate'
+                    : confidence === 2
+                      ? 'Shaky'
+                      : 'Need Basics'}
             </span>
           </div>
         </div>
@@ -256,3 +254,4 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
     </Modal>
   );
 };
+

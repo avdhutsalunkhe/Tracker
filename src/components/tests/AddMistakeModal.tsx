@@ -82,11 +82,10 @@ export const AddMistakeModal: React.FC<AddMistakeModalProps> = ({ isOpen, onClos
                   type="button"
                   key={cat}
                   onClick={() => setCategory(cat)}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${
-                    isSelected
+                  className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${isSelected
                       ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-xs'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   {cat}
                 </button>
@@ -168,3 +167,4 @@ export const AddMistakeModal: React.FC<AddMistakeModalProps> = ({ isOpen, onClos
     </Modal>
   );
 };
+
