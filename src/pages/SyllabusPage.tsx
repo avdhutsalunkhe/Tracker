@@ -289,7 +289,7 @@ export const SyllabusPage: React.FC = () => {
                             return (
                               <div
                                 key={iIdx}
-                                className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs hover:bg-white dark:hover:bg-slate-800/40 transition-colors"
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-3.5 py-2.5 text-xs hover:bg-white dark:hover:bg-slate-800/40 transition-colors"
                               >
                                 <span className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
                                   {item}

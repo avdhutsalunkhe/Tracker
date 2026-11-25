@@ -103,7 +103,7 @@ export const TaskList: React.FC = () => {
                     e.stopPropagation();
                     deleteTask(task.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-500 transition-all"
+                  className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-500 transition-all"
                   title="Delete task"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

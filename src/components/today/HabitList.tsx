@@ -135,7 +135,7 @@ export const HabitList: React.FC = () => {
                           e.stopPropagation();
                           deleteHabit(habit.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-500 transition-all shrink-0"
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-500 transition-all shrink-0"
                         title="Delete habit"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

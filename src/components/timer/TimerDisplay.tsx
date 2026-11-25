@@ -66,8 +66,8 @@ export const TimerDisplay: React.FC = () => {
       </div>
 
       {/* Main SVG Circular Timer */}
-      <div className="relative inline-flex items-center justify-center my-2" style={{ width: size, height: size }}>
-        <svg className="transform -rotate-90" width={size} height={size}>
+      <div className="relative inline-flex items-center justify-center my-2 w-[230px] h-[230px] sm:w-[280px] sm:h-[280px]">
+        <svg className="transform -rotate-90 w-full h-full" viewBox={`0 0 ${size} ${size}`}>
           {/* Background Track */}
           <circle
             className="text-slate-100 dark:text-slate-800/80"

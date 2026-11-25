@@ -28,23 +28,23 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
 
   return (
     <header className="sticky top-0 z-30 w-full bg-white/80 dark:bg-darkCard/80 backdrop-blur-md border-b border-lightBorder dark:border-darkBorder">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
         {/* Left: Mobile Brand Logo / Title */}
-        <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primaryIndigo-600 to-emerald-500 p-0.5 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-primaryIndigo-600 to-emerald-500 p-0.5 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0">
               <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
-                <span className="text-sm font-black text-white tracking-wider">TR</span>
+                <span className="text-xs sm:text-sm font-black text-white tracking-wider">TR</span>
               </div>
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5 leading-none">
+              <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5 leading-none">
                 Tracker
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
+                <span className="hidden xs:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
                   GATE
                 </span>
               </span>
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-tight">
+              <span className="hidden sm:block text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-tight">
                 Habits & Prep PWA
               </span>
             </div>
