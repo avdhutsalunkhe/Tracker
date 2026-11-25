@@ -310,57 +310,86 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     const willBeCompleted = existingLog ? !existingLog.completed : true;
+    const nowIso = new Date().toISOString();
 
     // Play subtle audio pop on check
     if (willBeCompleted) {
       sound.playCheckmark();
     }
 
-    // Optimistic UI update
-    const previousLogs = [...data.habitLogs];
-    let updatedLogs: HabitLog[];
+    const tempId = existingLog?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `hl-${Date.now()}`);
 
-    if (existingLog) {
-      updatedLogs = data.habitLogs.map((l) =>
-        l.id === existingLog.id ? { ...l, completed: willBeCompleted, completed_at: new Date().toISOString() } : l
+    // Optimistic UI update using functional prev state so rapid clicks don't overwrite each other
+    setData((prev) => {
+      const found = prev.habitLogs.find(
+        (l) => l.habit_id === habitId && l.log_date === dateToUse
       );
-    } else {
-      const newLog: HabitLog = {
-        id: `hl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        user_id: currentUserId,
-        habit_id: habitId,
-        log_date: dateToUse,
-        completed: true,
-        completed_at: new Date().toISOString(),
+      if (found) {
+        return {
+          ...prev,
+          habitLogs: prev.habitLogs.map((l) =>
+            l.habit_id === habitId && l.log_date === dateToUse
+              ? { ...l, completed: willBeCompleted, completed_at: nowIso }
+              : l
+          ),
+        };
+      }
+      return {
+        ...prev,
+        habitLogs: [
+          ...prev.habitLogs,
+          {
+            id: tempId,
+            user_id: currentUserId,
+            habit_id: habitId,
+            log_date: dateToUse,
+            completed: willBeCompleted,
+            completed_at: nowIso,
+          },
+        ],
       };
-      updatedLogs = [...data.habitLogs, newLog];
-    }
-
-    setData((prev) => ({ ...prev, habitLogs: updatedLogs }));
+    });
 
     // Sync to Supabase if connected
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
-        if (existingLog) {
-          const { error } = await supabase
-            .from('habit_logs')
-            .update({ completed: willBeCompleted, completed_at: new Date().toISOString() })
-            .eq('id', existingLog.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from('habit_logs').insert({
-            user_id: currentUserId,
-            habit_id: habitId,
-            log_date: dateToUse,
-            completed: true,
-            completed_at: new Date().toISOString(),
-          });
-          if (error) throw error;
+        const { data: upserted, error } = await supabase
+          .from('habit_logs')
+          .upsert(
+            {
+              user_id: currentUserId,
+              habit_id: habitId,
+              log_date: dateToUse,
+              completed: willBeCompleted,
+              completed_at: nowIso,
+            },
+            { onConflict: 'habit_id,log_date' }
+          )
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (upserted) {
+          setData((prev) => ({
+            ...prev,
+            habitLogs: prev.habitLogs.map((l) =>
+              l.habit_id === habitId && l.log_date === dateToUse ? upserted : l
+            ),
+          }));
         }
       } catch (err: unknown) {
         const error = err as Error;
-        // Rollback
-        setData((prev) => ({ ...prev, habitLogs: previousLogs }));
+        // Rollback only this habit+date entry
+        setData((prev) => ({
+          ...prev,
+          habitLogs: existingLog
+            ? prev.habitLogs.map((l) =>
+                l.habit_id === habitId && l.log_date === dateToUse ? existingLog : l
+              )
+            : prev.habitLogs.filter(
+                (l) => !(l.habit_id === habitId && l.log_date === dateToUse)
+              ),
+        }));
         showToast({
           type: 'error',
           title: 'Sync Failed',
@@ -372,8 +401,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addHabit = async (title: string, time_slot: HabitTimeSlot) => {
     const currentUserId = user?.id || '';
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `habit-${Date.now()}`;
     const newHabit: DailyHabit = {
-      id: `habit-${Date.now()}`,
+      id: newId,
       user_id: currentUserId,
       title: title.trim(),
       time_slot,
@@ -389,6 +419,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('daily_habits').insert({
+          id: newId,
           user_id: currentUserId,
           title: newHabit.title,
           time_slot: newHabit.time_slot,
@@ -473,8 +504,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTask = async (title: string, priority: PriorityLevel, date?: string) => {
     const currentUserId = user?.id || '';
     const targetDate = date || selectedDate;
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `task-${Date.now()}`;
     const newTask: DailyTask = {
-      id: `task-${Date.now()}`,
+      id: newId,
       user_id: currentUserId,
       title: title.trim(),
       task_date: targetDate,
@@ -490,6 +522,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
         const { data: inserted, error } = await supabase.from('daily_tasks').insert({
+          id: newId,
           user_id: currentUserId,
           title: newTask.title,
           task_date: newTask.task_date,
