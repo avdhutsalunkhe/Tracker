@@ -23,6 +23,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
     topicToEdit ? topicToEdit.subject_id : defaultSubjectId || (subjects[0]?.id || '')
   );
   const [topicName, setTopicName] = useState(topicToEdit ? topicToEdit.topic_name : '');
+  const [subtopic, setSubtopic] = useState(topicToEdit?.subtopic || '');
   const [status, setStatus] = useState<TopicStatus>(topicToEdit ? topicToEdit.status : 'In Progress');
   const [confidence, setConfidence] = useState<number>(topicToEdit ? topicToEdit.confidence : 3);
   const [pyqsSolved, setPyqsSolved] = useState<number>(topicToEdit ? topicToEdit.pyqs_solved : 10);
@@ -39,6 +40,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
     if (topicToEdit) {
       setSubjectId(topicToEdit.subject_id);
       setTopicName(topicToEdit.topic_name);
+      setSubtopic(topicToEdit.subtopic || '');
       setStatus(topicToEdit.status);
       setConfidence(topicToEdit.confidence);
       setPyqsSolved(topicToEdit.pyqs_solved);
@@ -48,6 +50,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
     } else {
       setSubjectId(defaultSubjectId || subjects[0]?.id || '');
       setTopicName('');
+      setSubtopic('');
       setStatus('In Progress');
       setConfidence(3);
       setPyqsSolved(10);
@@ -70,6 +73,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
         await updateTopic(topicToEdit.id, {
           subject_id: resolvedSubjectId,
           topic_name: topicName.trim(),
+          subtopic: subtopic.trim() || null,
           status,
           confidence,
           pyqs_solved: Number(pyqsSolved) || 0,
@@ -81,6 +85,7 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
         await addTopic({
           subject_id: resolvedSubjectId,
           topic_name: topicName.trim(),
+          subtopic: subtopic.trim() || null,
           status,
           confidence,
           pyqs_solved: Number(pyqsSolved) || 0,
@@ -134,6 +139,20 @@ export const AddTopicModal: React.FC<AddTopicModalProps> = ({
             value={topicName}
             onChange={(e) => setTopicName(e.target.value)}
             placeholder="e.g. Asymptotic Notation, Paging & Segmentation, Cache Mapping"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Subtopic (Optional) */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+            Subtopic <span className="font-normal text-slate-400">(Optional)</span>
+          </label>
+          <input
+            type="text"
+            value={subtopic}
+            onChange={(e) => setSubtopic(e.target.value)}
+            placeholder="e.g. 2D Arrays, Pointer Arithmetic, KMP Pattern Matching"
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

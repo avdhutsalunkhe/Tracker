@@ -57,6 +57,7 @@ export interface GateTopic {
   user_id: string;
   subject_id: string;
   topic_name: string;
+  subtopic?: string | null;
   status: TopicStatus;
   covered_date?: string | null; // YYYY-MM-DD
   confidence: number; // 1 to 5

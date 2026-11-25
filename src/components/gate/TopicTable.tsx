@@ -48,10 +48,11 @@ export const TopicTable: React.FC<TopicTableProps> = ({
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = t.topic_name.toLowerCase().includes(q);
+        const matchesSubtopic = t.subtopic && t.subtopic.toLowerCase().includes(q);
         const matchesNotes = t.notes && t.notes.toLowerCase().includes(q);
         const subjectName = subjectMap.get(t.subject_id)?.name.toLowerCase() || '';
         const matchesSubject = subjectName.includes(q);
-        if (!matchesName && !matchesNotes && !matchesSubject) return false;
+        if (!matchesName && !matchesSubtopic && !matchesNotes && !matchesSubject) return false;
       }
       return true;
     });
@@ -139,8 +140,13 @@ export const TopicTable: React.FC<TopicTableProps> = ({
                   >
                     {/* Topic Name & Subject Tag */}
                     <td className="py-3 px-3 min-w-[200px]">
-                      <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
                         <span>{topic.topic_name}</span>
+                        {topic.subtopic && (
+                          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                            {topic.subtopic}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         {subject && (

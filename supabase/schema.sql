@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.gate_topics (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     subject_id UUID NOT NULL REFERENCES public.gate_subjects(id) ON DELETE CASCADE,
     topic_name TEXT NOT NULL,
+    subtopic TEXT,
     status TEXT NOT NULL DEFAULT 'Not Started', -- 'Not Started', 'In Progress', 'Completed'
     covered_date DATE,
     confidence INT NOT NULL DEFAULT 3, -- 1 to 5

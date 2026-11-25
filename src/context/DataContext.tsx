@@ -790,6 +790,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user_id: currentUserId,
           subject_id: newTopic.subject_id,
           topic_name: newTopic.topic_name,
+          subtopic: newTopic.subtopic || null,
           status: newTopic.status,
           covered_date: newTopic.covered_date,
           confidence: newTopic.confidence,
