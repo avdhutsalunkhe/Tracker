@@ -98,6 +98,7 @@ interface DataContextType {
   // Actions - Settings & Data Export
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
   exportData: (formatType: 'json' | 'csv') => void;
+  resetAllData: () => Promise<void>;
 
   // Day drawer helper
   getDayDetailData: (date: string) => DayDetailData;
@@ -1340,6 +1341,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetAllData = async () => {
+    const currentUserId = user?.id || '';
+    if (!currentUserId) return;
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const tables = [
+          'habit_logs',
+          'daily_habits',
+          'daily_tasks',
+          'gate_revisions',
+          'study_sessions',
+          'mistake_logs',
+          'mock_tests',
+          'flashcards',
+          'gate_topics',
+          'gate_subjects',
+        ] as const;
+
+        for (const table of tables) {
+          const { error } = await supabase.from(table).delete().eq('user_id', currentUserId);
+          if (error) throw error;
+        }
+      }
+
+      const empty = getEmptyUserData(currentUserId);
+      setData(empty);
+      saveStoredData(currentUserId, empty);
+      showToast({
+        type: 'success',
+        title: 'All Data Reset',
+        message: 'Your Tracker account is now completely clean.',
+      });
+    } catch (err: unknown) {
+      const error = err as Error;
+      showToast({
+        type: 'error',
+        title: 'Reset Failed',
+        message: error.message || 'Could not reset all data.',
+      });
+    }
+  };
+
   // Helper for Calendar Day Drawer
   const getDayDetailData = useCallback(
     (targetDate: string): DayDetailData => {
@@ -1445,6 +1489,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteFlashcard,
         updateSettings,
         exportData,
+        resetAllData,
         getDayDetailData,
       }}
     >

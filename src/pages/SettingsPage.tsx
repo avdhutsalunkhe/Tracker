@@ -19,9 +19,10 @@ import {
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { settings, updateSettings, habits, reorderHabits, deleteHabit, exportData } = useData();
+  const { settings, updateSettings, habits, reorderHabits, deleteHabit, exportData, resetAllData } = useData();
   const { user, isConfigured, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [resetting, setResetting] = useState(false);
 
   const [examDate, setExamDate] = useState(settings?.gate_exam_date || '2027-02-06');
   const [dailyGoalHours, setDailyGoalHours] = useState(settings?.daily_study_goal_hours || 6.0);
@@ -242,6 +243,29 @@ export const SettingsPage: React.FC = () => {
           >
             <Download className="w-4 h-4" />
             <span>Export Topics Spreadsheet (CSV)</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={resetting}
+            onClick={async () => {
+              if (
+                confirm(
+                  'Are you sure you want to delete ALL your habits, tasks, GATE subjects, topics, revisions, mock tests, mistakes, and flashcards? This cannot be undone.'
+                )
+              ) {
+                setResetting(true);
+                try {
+                  await resetAllData();
+                } finally {
+                  setResetting(false);
+                }
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors shadow-2xs disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{resetting ? 'Resetting...' : 'Reset All Data'}</span>
           </button>
         </div>
       </div>
