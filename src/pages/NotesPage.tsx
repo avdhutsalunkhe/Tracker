@@ -5,12 +5,14 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import { GATE_SYLLABUS_PAPERS } from '../lib/syllabusData';
 import { MarkdownRenderer } from '../components/common/MarkdownRenderer';
+import { parseSubtopics, SubtopicItem } from '../utils/subtopics';
 import {
   StudyDocument,
   getCachedStudyDocuments,
   fetchStudyDocuments,
   uploadStudyDocument,
   getStudyDocumentUrl,
+  fetchStudyDocumentText,
   deleteStudyDocument,
   formatFileSize,
 } from '../lib/studyDocuments';
@@ -25,6 +27,10 @@ import {
   Save,
   Trash2,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  FolderOpen,
 } from 'lucide-react';
 
 const SUBJECT_PAPER_MAP_KEY = 'avdhut_subject_paper_map_v1';
@@ -71,14 +77,24 @@ export const NotesPage: React.FC = () => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [subjectPaperMap, setSubjectPaperMap] = useState<Record<string, 'DA' | 'CS'>>(loadSubjectPaperMap);
+
+  // Left sidebar tree state (W3Schools-style Topic -> Subtopics accordion)
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [selectedSubtopicTitle, setSelectedSubtopicTitle] = useState<string | null>(null);
+
+  // Cloud documents (separate files in Supabase Storage)
   const [cloudDocs, setCloudDocs] = useState<StudyDocument[]>(() =>
     getCachedStudyDocuments(userId)
   );
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [activeFileId, setActiveFileId] = useState<string>('__inline__');
+  const [mdCache, setMdCache] = useState<Record<string, string>>({});
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
 
-  // Quick .md / .pdf / .ppt upload target
-  const [uploadSubjectId, setUploadSubjectId] = useState<string>('');
-  const [uploadTopicId, setUploadTopicId] = useState<string>('');
+  // Inline edit state for selected topic's summary notes
+  const [isEditingInline, setIsEditingInline] = useState(false);
+  const [draftNotes, setDraftNotes] = useState('');
   const mdInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -92,13 +108,8 @@ export const NotesPage: React.FC = () => {
       .catch(() => {});
   }, [userId]);
 
-  // Inline edit state per topic
-  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
-  const [draftNotes, setDraftNotes] = useState('');
-
-  const getSubjectPaper = (subjId: string, subjName: string): 'DA' | 'CS' => {
-    return subjectPaperMap[subjId] || inferPaperForSubject(subjName);
-  };
+  const getSubjectPaper = (subjId: string, subjName: string): 'DA' | 'CS' =>
+    subjectPaperMap[subjId] || inferPaperForSubject(subjName);
 
   const setSubjectPaper = (subjId: string, paper: 'DA' | 'CS') => {
     const next = { ...subjectPaperMap, [subjId]: paper };
@@ -110,23 +121,18 @@ export const NotesPage: React.FC = () => {
     }
   };
 
-  const filteredSubjects = useMemo(() => {
-    return subjects.filter((s) => {
-      if (paperFilter === 'ALL') return true;
-      return getSubjectPaper(s.id, s.name) === paperFilter;
-    });
-  }, [subjects, paperFilter, subjectPaperMap]);
-
   const subjectMap = useMemo(() => {
     const map = new Map<string, (typeof subjects)[0]>();
     subjects.forEach((s) => map.set(s.id, s));
     return map;
   }, [subjects]);
 
-  const uploadSubjectTopics = useMemo(() => {
-    if (!uploadSubjectId) return [];
-    return topics.filter((t) => t.subject_id === uploadSubjectId);
-  }, [topics, uploadSubjectId]);
+  const filteredSubjects = useMemo(() => {
+    return subjects.filter((s) => {
+      if (paperFilter === 'ALL') return true;
+      return getSubjectPaper(s.id, s.name) === paperFilter;
+    });
+  }, [subjects, paperFilter, subjectPaperMap]);
 
   const filteredTopics = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -140,6 +146,7 @@ export const NotesPage: React.FC = () => {
         return (
           t.topic_name.toLowerCase().includes(q) ||
           subj.name.toLowerCase().includes(q) ||
+          (t.subtopic || '').toLowerCase().includes(q) ||
           (t.notes || '').toLowerCase().includes(q)
         );
       }
@@ -147,127 +154,187 @@ export const NotesPage: React.FC = () => {
     });
   }, [topics, subjectMap, paperFilter, selectedSubjectId, searchQuery, subjectPaperMap]);
 
-  const handleQuickUploadMd = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Auto-select first visible topic if none selected
+  const activeTopic = useMemo(() => {
+    if (selectedTopicId) {
+      const found = filteredTopics.find((t) => t.id === selectedTopicId);
+      if (found) return found;
+    }
+    return filteredTopics[0] || null;
+  }, [filteredTopics, selectedTopicId]);
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const isMarkdown = ['md', 'markdown', 'txt'].includes(ext);
+  const activeSubject = activeTopic ? subjectMap.get(activeTopic.subject_id) || null : null;
 
-    if (!isMarkdown) {
-      // Upload PDF / PPT / PPTX directly to Supabase Storage (never local)
-      if (!userId) {
+  // Separate uploaded files belonging to activeTopic
+  const activeTopicDocs = useMemo(() => {
+    if (!activeTopic) return [];
+    return cloudDocs.filter(
+      (d) => d.category === 'Notes' && d.topic_id === activeTopic.id
+    );
+  }, [cloudDocs, activeTopic]);
+
+  // Pick default active file tab when switching topics
+  useEffect(() => {
+    setIsEditingInline(false);
+    if (!activeTopic) return;
+    if (activeTopicDocs.length > 0 && !activeTopic.notes?.trim()) {
+      setActiveFileId(activeTopicDocs[0].id);
+    } else if (activeTopic.notes?.trim()) {
+      setActiveFileId('__inline__');
+    } else if (activeTopicDocs.length > 0) {
+      setActiveFileId(activeTopicDocs[0].id);
+    } else {
+      setActiveFileId('__inline__');
+    }
+  }, [activeTopic?.id]);
+
+  // Load .md text from Supabase Storage when a cloud .md file tab is selected
+  useEffect(() => {
+    if (!activeFileId || activeFileId === '__inline__') return;
+    const doc = activeTopicDocs.find((d) => d.id === activeFileId);
+    if (!doc) return;
+    const isMd = ['md', 'markdown', 'txt'].includes(doc.file_type.toLowerCase());
+    if (!isMd || mdCache[doc.id] !== undefined) return;
+
+    setLoadingDocId(doc.id);
+    fetchStudyDocumentText(doc.storage_path)
+      .then((text) => setMdCache((prev) => ({ ...prev, [doc.id]: text })))
+      .catch((err: unknown) => {
         showToast({
           type: 'error',
-          title: 'Sign In Required',
-          message: 'Sign in with your Supabase account to upload PDF/PPT files.',
-        });
-        e.target.value = '';
-        return;
-      }
-      setUploadingDoc(true);
-      try {
-        const subj = subjects.find((s) => s.id === uploadSubjectId);
-        const paper = subj ? getSubjectPaper(subj.id, subj.name) : 'DA';
-        const doc = await uploadStudyDocument({
-          userId,
-          file,
-          paper,
-          subjectId: uploadSubjectId || null,
-          topicId: uploadTopicId || null,
-          category: 'Notes',
-        });
-        setCloudDocs((prev) => [doc, ...prev]);
-        showToast({
-          type: 'success',
-          title: 'Document Uploaded to Supabase',
-          message: `"${file.name}" saved in Supabase Storage.`,
-        });
-      } catch (err: unknown) {
-        showToast({
-          type: 'error',
-          title: 'Upload Failed',
+          title: 'Could not load file',
           message: (err as Error).message,
         });
-      } finally {
-        setUploadingDoc(false);
-        e.target.value = '';
-      }
-      return;
-    }
+      })
+      .finally(() => setLoadingDocId(null));
+  }, [activeFileId, activeTopicDocs, mdCache, showToast]);
 
-    if (!uploadTopicId) {
+  const handleUploadSeparateFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (!activeTopic) {
       showToast({
         type: 'error',
         title: 'Select a Topic',
-        message: 'Choose a Subject and Topic before uploading a .md note.',
+        message: 'Select a topic from the left sidebar first.',
       });
       e.target.value = '';
       return;
     }
 
-    const target = topics.find((t) => t.id === uploadTopicId);
-    if (!target) return;
+    if (!userId) {
+      showToast({
+        type: 'error',
+        title: 'Sign In Required',
+        message: 'Sign in with your Supabase account to upload separate files.',
+      });
+      e.target.value = '';
+      return;
+    }
 
+    setUploadingDoc(true);
     try {
-      const text = (await file.text()).trim();
-      if (!text) return;
-      const nextNotes = target.notes?.trim()
-        ? `${target.notes.trim()}\n\n---\n\n${text}`
-        : text;
-      await updateTopic(target.id, { notes: nextNotes });
-      if (userId) {
-        const subj = subjects.find((s) => s.id === uploadSubjectId);
-        const paper = subj ? getSubjectPaper(subj.id, subj.name) : 'DA';
+      const subj = subjectMap.get(activeTopic.subject_id);
+      const paper = subj ? getSubjectPaper(subj.id, subj.name) : 'DA';
+      let lastDoc: StudyDocument | null = null;
+
+      for (const file of files) {
         const doc = await uploadStudyDocument({
           userId,
           file,
           paper,
-          subjectId: uploadSubjectId || null,
-          topicId: uploadTopicId || null,
+          subjectId: activeTopic.subject_id,
+          topicId: activeTopic.id,
           category: 'Notes',
-        }).catch(() => null);
-        if (doc) setCloudDocs((prev) => [doc, ...prev]);
+        });
+        setCloudDocs((prev) => [doc, ...prev]);
+        lastDoc = doc;
+
+        const isMd = ['md', 'markdown', 'txt'].includes(doc.file_type.toLowerCase());
+        if (isMd) {
+          const text = await file.text();
+          setMdCache((prev) => ({ ...prev, [doc.id]: text }));
+        }
       }
-      showToast({
-        type: 'success',
-        title: 'Markdown Note Saved',
-        message: `Added "${file.name}" to ${target.topic_name}.`,
-      });
-    } catch {
+
+      if (lastDoc) {
+        setActiveFileId(lastDoc.id);
+        showToast({
+          type: 'success',
+          title: 'Separate File Uploaded',
+          message: `Added ${files.length} file${files.length === 1 ? '' : 's'} to ${activeTopic.topic_name}.`,
+        });
+      }
+    } catch (err: unknown) {
       showToast({
         type: 'error',
         title: 'Upload Failed',
-        message: 'Could not read the selected .md file.',
+        message: (err as Error).message,
       });
     } finally {
+      setUploadingDoc(false);
       e.target.value = '';
     }
   };
 
-  const noteCloudDocs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return cloudDocs.filter((d) => {
-      if (d.category !== 'Notes') return false;
-      if (paperFilter !== 'ALL' && d.paper !== paperFilter) return false;
-      if (selectedSubjectId !== 'ALL' && d.subject_id !== selectedSubjectId) return false;
-      if (q) {
-        return d.title.toLowerCase().includes(q) || d.file_name.toLowerCase().includes(q);
-      }
-      return true;
+  const renderSidebarSubtopics = (
+    items: SubtopicItem[],
+    topicId: string,
+    depth = 0
+  ): React.ReactNode => {
+    return items.map((sub) => {
+      const isSubSelected =
+        selectedTopicId === topicId && selectedSubtopicTitle === sub.title;
+      return (
+        <div key={sub.id} className={depth > 0 ? 'pl-3 border-l border-slate-200 dark:border-slate-700' : ''}>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedTopicId(topicId);
+              setSelectedSubtopicTitle(sub.title);
+            }}
+            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
+              isSubSelected
+                ? 'bg-emerald-600 text-white font-semibold'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <span className="truncate">{sub.title}</span>
+            {sub.done && (
+              <CheckCircle2
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  isSubSelected ? 'text-white' : 'text-emerald-500'
+                }`}
+              />
+            )}
+          </button>
+          {sub.children && sub.children.length > 0 && (
+            <div className="mt-0.5 space-y-0.5">
+              {renderSidebarSubtopics(sub.children, topicId, depth + 1)}
+            </div>
+          )}
+        </div>
+      );
     });
-  }, [cloudDocs, paperFilter, selectedSubjectId, searchQuery]);
+  };
+
+  const selectedCloudDoc =
+    activeFileId !== '__inline__'
+      ? activeTopicDocs.find((d) => d.id === activeFileId) || null
+      : null;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* Header & Paper Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            Study Notes &amp; Markdown Library
+            Study Notes &amp; File Explorer
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Organized by Paper (DS / CS), Subject, and Topic — upload <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code> files rendered like GitHub.
+            Browse by DS / CS → Subject → Topic &amp; Subtopics. Upload multiple separate <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code>, <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.pdf</code>, or <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.ppt</code> files.
           </p>
         </div>
 
@@ -292,78 +359,8 @@ export const NotesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick .md Upload Bar */}
-      <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 shadow-sm space-y-3">
-        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-          <Upload className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Upload .md Note to Subject &amp; Topic</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          <select
-            value={uploadSubjectId}
-            onChange={(e) => {
-              setUploadSubjectId(e.target.value);
-              setUploadTopicId('');
-            }}
-            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Select Subject...</option>
-            {filteredSubjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                [{getSubjectPaper(s.id, s.name) === 'DA' ? 'DS' : 'CS'}] {s.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={uploadTopicId}
-            onChange={(e) => setUploadTopicId(e.target.value)}
-            disabled={!uploadSubjectId}
-            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-          >
-            <option value="">Select Topic...</option>
-            {uploadSubjectTopics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.topic_name}
-              </option>
-            ))}
-          </select>
-
-          <div>
-            <input
-              ref={mdInputRef}
-              type="file"
-              accept=".md,.markdown,.txt,.pdf,.ppt,.pptx"
-              onChange={handleQuickUploadMd}
-              className="hidden"
-            />
-            <button
-              type="button"
-              disabled={uploadingDoc}
-              onClick={() => mdInputRef.current?.click()}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-60"
-            >
-              {uploadingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              <span>{uploadingDoc ? 'Uploading...' : 'Upload .md / .pdf / .ppt'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Subject Filter Pills + Search */}
-      <div className="space-y-3">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search notes, topics, or subjects..."
-            className="w-full pl-10 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-darkCard text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -391,44 +388,323 @@ export const NotesPage: React.FC = () => {
             </button>
           ))}
         </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search topics or subtopics..."
+            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-darkCard text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
       </div>
 
-      {/* Uploaded Cloud Documents (.pdf, .ppt, .md in Supabase Storage) */}
-      {noteCloudDocs.length > 0 && (
-        <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-5 shadow-sm space-y-3">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            Cloud Documents ({noteCloudDocs.length}) — Supabase Storage
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {noteCloudDocs.map((doc) => {
-              const subj = doc.subject_id ? subjectMap.get(doc.subject_id) : null;
+      {/* W3Schools-Style Two-Pane Layout */}
+      {filteredTopics.length === 0 ? (
+        <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-8 text-center space-y-2">
+          <BookOpen className="w-8 h-8 text-slate-400 mx-auto" />
+          <p className="text-xs text-slate-500">
+            No topics found for this filter. Add topics in GATE Study or Syllabus first.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left Pane: Topic & Subtopic Accordion Tree */}
+          <aside className="lg:col-span-4 xl:col-span-3 rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-3 shadow-sm lg:sticky lg:top-20 max-h-[65vh] lg:max-h-[calc(100vh-8rem)] overflow-y-auto space-y-1">
+            <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Topics &amp; Subtopics ({filteredTopics.length})
+            </div>
+
+            {filteredTopics.map((t) => {
+              const subj = subjectMap.get(t.subject_id);
+              const subList = parseSubtopics(t.subtopic);
+              const hasSubs = subList.length > 0;
+              const isTopicActive = activeTopic?.id === t.id && !selectedSubtopicTitle;
+              const isExpanded = expandedTopics[t.id] ?? activeTopic?.id === t.id;
+              const fileCount = cloudDocs.filter(
+                (d) => d.category === 'Notes' && d.topic_id === t.id
+              ).length;
+
               return (
-                <div
-                  key={doc.id}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                        {doc.title}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300">
-                        {doc.file_type}
-                      </span>
+                <div key={t.id} className="space-y-0.5">
+                  <div
+                    className={`flex items-center justify-between gap-1 rounded-xl px-2 py-2 transition-colors ${
+                      isTopicActive
+                        ? 'bg-indigo-600 text-white font-semibold'
+                        : activeTopic?.id === t.id
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopicId(t.id);
+                        setSelectedSubtopicTitle(null);
+                        if (hasSubs) {
+                          setExpandedTopics((prev) => ({ ...prev, [t.id]: true }));
+                        }
+                      }}
+                      className="flex-1 min-w-0 text-left text-xs truncate"
+                    >
+                      <span className="block truncate">{t.topic_name}</span>
                       {subj && (
-                        <span className="text-[10px] text-slate-500">{subj.name}</span>
+                        <span
+                          className={`block text-[10px] truncate ${
+                            isTopicActive ? 'text-indigo-100' : 'text-slate-400'
+                          }`}
+                        >
+                          {subj.name}
+                          {fileCount > 0 ? ` · ${fileCount} file${fileCount === 1 ? '' : 's'}` : ''}
+                        </span>
                       )}
-                    </div>
-                    <span className="text-[10px] text-slate-400 tabular-nums">
-                      {formatFileSize(doc.file_size)}
-                    </span>
+                    </button>
+
+                    {hasSubs && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedTopics((prev) => ({ ...prev, [t.id]: !isExpanded }))
+                        }
+                        className={`p-1 rounded-lg shrink-0 ${
+                          isTopicActive ? 'hover:bg-indigo-500' : 'hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                        aria-label="Toggle subtopics"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+
+                  {hasSubs && isExpanded && (
+                    <div className="pl-3 ml-2 border-l border-slate-200 dark:border-slate-700 space-y-0.5 py-0.5">
+                      {renderSidebarSubtopics(subList, t.id)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </aside>
+
+          {/* Right Pane: Separate Files & GitHub Reader */}
+          {activeTopic && activeSubject && (
+            <section className="lg:col-span-8 xl:col-span-9 rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-6 shadow-sm space-y-4">
+              {/* Top Breadcrumb + Upload Separate File */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSubjectPaper(
+                          activeSubject.id,
+                          getSubjectPaper(activeSubject.id, activeSubject.name) === 'DA' ? 'CS' : 'DA'
+                        )
+                      }
+                      title="Click to switch DS / CS paper tag"
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                    >
+                      {getSubjectPaper(activeSubject.id, activeSubject.name) === 'DA' ? 'DS (DA)' : 'CS'}
+                    </button>
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-bold"
+                      style={{ backgroundColor: `${activeSubject.color}18`, color: activeSubject.color }}
+                    >
+                      {activeSubject.name}
+                    </span>
+                    {selectedSubtopicTitle && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                        Subtopic: {selectedSubtopicTitle}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {activeTopic.topic_name}
+                  </h2>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <input
+                    ref={mdInputRef}
+                    type="file"
+                    accept=".md,.markdown,.txt,.pdf,.ppt,.pptx"
+                    multiple
+                    onChange={handleUploadSeparateFiles}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingDoc}
+                    onClick={() => mdInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-60"
+                  >
+                    {uploadingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    <span>{uploadingDoc ? 'Uploading...' : '+ Add Separate File'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/gate/topic/${activeTopic.id}`)}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Topic Details</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Separate File Tabs Bar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFileId('__inline__');
+                    setIsEditingInline(false);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                    activeFileId === '__inline__'
+                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Overview Notes</span>
+                </button>
+
+                {activeTopicDocs.map((doc) => {
+                  const isActive = activeFileId === doc.id;
+                  return (
+                    <div
+                      key={doc.id}
+                      className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                        isActive
+                          ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFileId(doc.id);
+                          setIsEditingInline(false);
+                        }}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <FileText className="w-3.5 h-3.5 shrink-0" />
+                        <span className="max-w-[160px] truncate">{doc.title}</span>
+                        <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-white/80 dark:bg-slate-900/80">
+                          {doc.file_type}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await deleteStudyDocument(userId, doc);
+                          setCloudDocs((prev) => prev.filter((d) => d.id !== doc.id));
+                          if (activeFileId === doc.id) setActiveFileId('__inline__');
+                          showToast({ type: 'info', title: 'File Deleted' });
+                        }}
+                        className="p-0.5 rounded text-slate-400 hover:text-rose-500"
+                        title="Delete file"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Active File / Notes Content */}
+              {activeFileId === '__inline__' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isEditingInline) {
+                          setIsEditingInline(false);
+                        } else {
+                          setDraftNotes(activeTopic.notes || '');
+                          setIsEditingInline(true);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      {isEditingInline ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+                      <span>{isEditingInline ? 'Preview' : 'Edit Overview'}</span>
+                    </button>
+                  </div>
+
+                  {isEditingInline ? (
+                    <div className="space-y-2.5">
+                      <textarea
+                        rows={8}
+                        value={draftNotes}
+                        onChange={(e) => setDraftNotes(e.target.value)}
+                        placeholder="Write GitHub Markdown notes..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await updateTopic(activeTopic.id, { notes: draftNotes.trim() || null });
+                            setIsEditingInline(false);
+                            showToast({ type: 'success', title: 'Notes Saved' });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Save</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : activeTopic.notes?.trim() ? (
+                    <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 overflow-x-auto">
+                      <MarkdownRenderer text={activeTopic.notes} />
+                    </div>
+                  ) : (
+                    <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-2">
+                      <FolderOpen className="w-7 h-7 text-slate-400 mx-auto" />
+                      <p className="text-xs text-slate-500">
+                        Click <span className="font-semibold">+ Add Separate File</span> above to upload separate <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code>, <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.pdf</code>, or <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.ppt</code> files for this topic.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : selectedCloudDoc ? (
+                ['md', 'markdown', 'txt'].includes(selectedCloudDoc.file_type.toLowerCase()) ? (
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 overflow-x-auto">
+                    {loadingDocId === selectedCloudDoc.id ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-400 py-4">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Loading {selectedCloudDoc.file_name} from Supabase...</span>
+                      </div>
+                    ) : (
+                      <MarkdownRenderer text={mdCache[selectedCloudDoc.id] || ''} />
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {selectedCloudDoc.file_name}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {selectedCloudDoc.file_type.toUpperCase()} · {formatFileSize(selectedCloudDoc.file_size)} · Stored in Supabase
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={async () => {
                         try {
-                          const url = await getStudyDocumentUrl(doc.storage_path);
+                          const url = await getStudyDocumentUrl(selectedCloudDoc.storage_path);
                           window.open(url, '_blank', 'noopener,noreferrer');
                         } catch (err: unknown) {
                           showToast({
@@ -438,152 +714,16 @@ export const NotesPage: React.FC = () => {
                           });
                         }
                       }}
-                      className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-                      title="Open / Download from Supabase"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0"
                     >
                       <ExternalLink className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await deleteStudyDocument(userId, doc);
-                        setCloudDocs((prev) => prev.filter((d) => d.id !== doc.id));
-                        showToast({ type: 'info', title: 'Document Deleted' });
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500"
-                      title="Delete from Supabase"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Open / Download</span>
                     </button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Notes Cards grouped by Topic */}
-      {filteredTopics.length === 0 ? (
-        <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-8 text-center space-y-2">
-          <BookOpen className="w-8 h-8 text-slate-400 mx-auto" />
-          <p className="text-xs text-slate-500">
-            No topics match this filter. Add subjects/topics in GATE Study or Syllabus first.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredTopics.map((topic) => {
-            const subj = subjectMap.get(topic.subject_id)!;
-            const paper = getSubjectPaper(subj.id, subj.name);
-            const isEditing = editingTopicId === topic.id;
-
-            return (
-              <div
-                key={topic.id}
-                className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-5 shadow-sm space-y-3"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setSubjectPaper(subj.id, paper === 'DA' ? 'CS' : 'DA')}
-                        title="Click to switch DS / CS paper tag"
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
-                      >
-                        {paper === 'DA' ? 'DS (DA)' : 'CS'}
-                      </button>
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold"
-                        style={{ backgroundColor: `${subj.color}18`, color: subj.color }}
-                      >
-                        {subj.name}
-                      </span>
-                    </div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      {topic.topic_name}
-                    </h2>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isEditing) {
-                          setEditingTopicId(null);
-                        } else {
-                          setEditingTopicId(topic.id);
-                          setDraftNotes(topic.notes || '');
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      {isEditing ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
-                      <span>{isEditing ? 'Cancel' : 'Edit Notes'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/gate/topic/${topic.id}`)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Open Topic</span>
-                    </button>
-                  </div>
-                </div>
-
-                {isEditing ? (
-                  <div className="space-y-2.5">
-                    <textarea
-                      rows={6}
-                      value={draftNotes}
-                      onChange={(e) => setDraftNotes(e.target.value)}
-                      placeholder="Write GitHub Markdown notes..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <div className="flex items-center justify-end gap-2">
-                      {draftNotes.trim() && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await updateTopic(topic.id, { notes: null });
-                            setEditingTopicId(null);
-                            showToast({ type: 'info', title: 'Notes Cleared' });
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Clear</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await updateTopic(topic.id, { notes: draftNotes.trim() || null });
-                          setEditingTopicId(null);
-                          showToast({ type: 'success', title: 'Notes Saved' });
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Save</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : topic.notes?.trim() ? (
-                  <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 overflow-x-auto">
-                    <MarkdownRenderer text={topic.notes} />
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">
-                    No notes yet. Click <span className="font-semibold">Edit Notes</span> or upload a <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code> file above.
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                )
+              ) : null}
+            </section>
+          )}
         </div>
       )}
     </div>
