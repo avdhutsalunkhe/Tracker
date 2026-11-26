@@ -1,5 +1,6 @@
 import React from 'react';
 import { useData } from '../../context/DataContext';
+import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { format, parseISO } from 'date-fns';
 import {
   X,
@@ -174,9 +175,9 @@ export const DayDrawer: React.FC<DayDrawerProps> = ({ date, onClose, onOpenAddTo
                       <span>Study Hours: {topic.study_hours}h</span>
                     </div>
                     {topic.notes && (
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 italic bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-                        {topic.notes}
-                      </p>
+                      <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 max-h-64 overflow-y-auto overflow-x-auto">
+                        <MarkdownRenderer text={topic.notes} />
+                      </div>
                     )}
                   </div>
                 ))}
