@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTimer } from '../../context/TimerContext';
 import { useData } from '../../context/DataContext';
 import { soundscape, SoundscapeType } from '../../lib/soundscape';
-import { Timer, Clock, Volume2 } from 'lucide-react';
+import { Timer, Clock, Volume2, Lock } from 'lucide-react';
 
 export const ModeSelector: React.FC = () => {
   const {
@@ -19,6 +19,10 @@ export const ModeSelector: React.FC = () => {
     setSelectedSubjectId,
     selectedTopicId,
     setSelectedTopicId,
+    focusLockEnabled,
+    setFocusLockEnabled,
+    focusPin,
+    setFocusPin,
   } = useTimer();
 
   const { subjects, topics } = useData();
@@ -197,6 +201,34 @@ export const ModeSelector: React.FC = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Strict Focus Lock Mode (Fullscreen + PIN) */}
+      <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-indigo-500" />
+            Strict Focus Lock (PIN + Wake Lock)
+          </label>
+          <input
+            type="checkbox"
+            checked={focusLockEnabled}
+            onChange={(e) => setFocusLockEnabled(e.target.checked)}
+            className="w-4 h-4 rounded text-indigo-600"
+          />
+        </div>
+        {focusLockEnabled && (
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-slate-500 dark:text-slate-400">Unlock PIN / Password:</span>
+            <input
+              type="password"
+              value={focusPin}
+              onChange={(e) => setFocusPin(e.target.value)}
+              placeholder="PIN (e.g. 1234)"
+              className="w-28 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono outline-none"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

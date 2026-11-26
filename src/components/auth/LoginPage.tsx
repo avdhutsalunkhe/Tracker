@@ -62,14 +62,14 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md rounded-3xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-6 sm:p-8 shadow-xl space-y-6">
         {/* Brand */}
         <div className="flex flex-col items-center text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primaryIndigo-600 to-emerald-500 p-0.5 shadow-lg shadow-indigo-500/20">
-            <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center">
-              <span className="text-base font-black text-white tracking-wider">TR</span>
-            </div>
-          </div>
+          <img
+            src="/pwa-192x192.png"
+            alt="Avdhut Logo"
+            className="w-14 h-14 rounded-2xl shadow-lg object-cover"
+          />
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
-              Tracker
+              Avdhut
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Daily Habit & GATE Exam Preparation

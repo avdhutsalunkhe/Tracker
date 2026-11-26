@@ -33,6 +33,14 @@ interface TimerContextType {
   finishSession: (focusQuality?: FocusQuality) => void;
   skipBreak: () => void;
 
+  // Focus Lock (Fullscreen + PIN)
+  focusLockEnabled: boolean;
+  setFocusLockEnabled: (enabled: boolean) => void;
+  focusPin: string;
+  setFocusPin: (pin: string) => void;
+  isScreenLocked: boolean;
+  unlockScreen: (enteredPin: string) => boolean;
+
   // Formatted helpers
   formattedTime: string;
   progressPercent: number;
@@ -74,6 +82,72 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Stopwatch countup seconds
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
+  // Focus Lock + PIN state
+  const [focusLockEnabled, setFocusLockEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tracker_focus_lock_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [focusPin, setFocusPinState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tracker_focus_pin') || '1234';
+    } catch {
+      return '1234';
+    }
+  });
+  const [isScreenLocked, setIsScreenLocked] = useState(false);
+
+  const setFocusPin = (pin: string) => {
+    const clean = pin.trim() || '1234';
+    setFocusPinState(clean);
+    try {
+      localStorage.setItem('tracker_focus_pin', clean);
+    } catch {
+      // Ignore
+    }
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tracker_focus_lock_enabled', String(focusLockEnabled));
+    } catch {
+      // Ignore
+    }
+  }, [focusLockEnabled]);
+
+  const unlockScreen = (enteredPin: string): boolean => {
+    if (enteredPin.trim() === focusPin) {
+      setIsScreenLocked(false);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // Timestamp refs so background browser throttling never loses time
+  const endAtMsRef = useRef<number | null>(null);
+  const startedAtMsRef = useRef<number | null>(null);
+
+  // Screen Wake Lock while timer is running
+  useEffect(() => {
+    let wakeLock: { release: () => Promise<void> } | null = null;
+    const nav = navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
+    };
+    if (isRunning && nav.wakeLock) {
+      nav.wakeLock.request('screen').then((wl) => {
+        wakeLock = wl;
+      }).catch(() => {});
+    }
+    return () => {
+      wakeLock?.release().catch(() => {});
+    };
+  }, [isRunning]);
+
   // When focus/break durations change while stopped in that phase, reset countdown
   useEffect(() => {
     if (!isRunning && mode === 'Pomodoro') {
@@ -83,44 +157,58 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [focusMinutes, breakMinutes, longBreakMinutes, phase, mode, isRunning, getInitialSecondsForPhase]);
 
-  // Timer Tick Interval
+  // Timer Tick Interval using wall-clock timestamps (accurate in background!)
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     if (isRunning) {
-      timer = setInterval(() => {
-        if (mode === 'Pomodoro') {
-          setTimeLeftSeconds((prev) => {
-            if (prev <= 1) {
-              // Timer completed
-              sound.playTimerComplete();
+      if (mode === 'Pomodoro' && !endAtMsRef.current) {
+        endAtMsRef.current = Date.now() + timeLeftSeconds * 1000;
+      }
+      if (mode === 'Stopwatch' && !startedAtMsRef.current) {
+        startedAtMsRef.current = Date.now() - elapsedSeconds * 1000;
+      }
 
-              if (phase === 'focus') {
-                // Focus session ended, auto-log focus duration
-                const focusMins = Math.round(totalDurationSeconds / 60);
-                if (focusMins >= 1) {
-                  logStudySession(selectedSubjectId, selectedTopicId, focusMins, 'Pomodoro');
-                }
-                // Transition to break
-                setPhase('short_break');
-                const nextSec = breakMinutes * 60;
-                setTotalDurationSeconds(nextSec);
-                return nextSec;
-              } else {
-                // Break ended, transition to focus
-                setPhase('focus');
-                const nextSec = focusMinutes * 60;
-                setTotalDurationSeconds(nextSec);
-                return nextSec;
+      const syncFromClock = () => {
+        if (mode === 'Pomodoro' && endAtMsRef.current) {
+          const remaining = Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000));
+          if (remaining <= 0) {
+            sound.playTimerComplete();
+            if (phase === 'focus') {
+              const focusMins = Math.round(totalDurationSeconds / 60);
+              if (focusMins >= 1) {
+                logStudySession(selectedSubjectId, selectedTopicId, focusMins, 'Pomodoro');
               }
+              setPhase('short_break');
+              const nextSec = breakMinutes * 60;
+              setTotalDurationSeconds(nextSec);
+              setTimeLeftSeconds(nextSec);
+              endAtMsRef.current = Date.now() + nextSec * 1000;
+            } else {
+              setPhase('focus');
+              const nextSec = focusMinutes * 60;
+              setTotalDurationSeconds(nextSec);
+              setTimeLeftSeconds(nextSec);
+              endAtMsRef.current = Date.now() + nextSec * 1000;
             }
-            return prev - 1;
-          });
-        } else {
-          // Stopwatch mode: increment elapsed seconds
-          setElapsedSeconds((prev) => prev + 1);
+          } else {
+            setTimeLeftSeconds(remaining);
+          }
+        } else if (mode === 'Stopwatch' && startedAtMsRef.current) {
+          setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAtMsRef.current) / 1000)));
         }
-      }, 1000);
+      };
+
+      timer = setInterval(syncFromClock, 1000);
+      document.addEventListener('visibilitychange', syncFromClock);
+
+      return () => {
+        if (timer) clearInterval(timer);
+        document.removeEventListener('visibilitychange', syncFromClock);
+      };
+    } else {
+      endAtMsRef.current = null;
+      startedAtMsRef.current = null;
     }
 
     return () => {
@@ -138,11 +226,34 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     logStudySession,
   ]);
 
-  const startTimer = () => setIsRunning(true);
-  const pauseTimer = () => setIsRunning(false);
+  const startTimer = () => {
+    if (mode === 'Pomodoro') {
+      endAtMsRef.current = Date.now() + timeLeftSeconds * 1000;
+    } else {
+      startedAtMsRef.current = Date.now() - elapsedSeconds * 1000;
+    }
+    setIsRunning(true);
+    if (focusLockEnabled) {
+      setIsScreenLocked(true);
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }
+  };
+  const pauseTimer = () => {
+    endAtMsRef.current = null;
+    startedAtMsRef.current = null;
+    setIsRunning(false);
+  };
 
   const resetTimer = () => {
+    endAtMsRef.current = null;
+    startedAtMsRef.current = null;
     setIsRunning(false);
+    setIsScreenLocked(false);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
     clearActiveTimerNotification();
     if (mode === 'Pomodoro') {
       const sec = getInitialSecondsForPhase(phase);
@@ -273,6 +384,12 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         resetTimer,
         finishSession,
         skipBreak,
+        focusLockEnabled,
+        setFocusLockEnabled,
+        focusPin,
+        setFocusPin,
+        isScreenLocked,
+        unlockScreen,
         formattedTime,
         progressPercent,
       }}

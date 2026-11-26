@@ -79,7 +79,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={mode === 'signin' ? 'Sign In to Tracker' : 'Create Tracker Account'}
+      title={mode === 'signin' ? 'Sign In to Avdhut' : 'Create Avdhut Account'}
       subtitle="Sync your daily habits, study hours, and GATE progress securely across all your devices."
     >
       {errorMsg && (

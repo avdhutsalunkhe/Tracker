@@ -34,15 +34,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
         {/* Left: Mobile Brand Logo / Title */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-primaryIndigo-600 to-emerald-500 p-0.5 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
-                <span className="text-xs sm:text-sm font-black text-white tracking-wider">TR</span>
-              </div>
-            </div>
+            <img
+              src="/pwa-192x192.png"
+              alt="Avdhut Logo"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-md group-hover:scale-105 transition-transform shrink-0 object-cover"
+            />
             <div className="flex flex-col">
               <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5 leading-none">
-                Tracker
-                <span className="hidden xs:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
+                Avdhut
+                <span className="hidden xs:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400">
                   GATE
                 </span>
               </span>

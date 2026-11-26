@@ -15,6 +15,7 @@ import { CommandPalette } from './components/common/CommandPalette';
 import { ToastContainer } from './components/common/ToastContainer';
 import { AuthModal } from './components/auth/AuthModal';
 import { LoginPage } from './components/auth/LoginPage';
+import { Lock } from 'lucide-react';
 
 // Pages
 import { TodayPage } from './pages/TodayPage';
@@ -32,12 +33,14 @@ import { TimetablePage } from './pages/TimetablePage';
 
 const AppContent: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { isRunning, startTimer, pauseTimer } = useTimer();
+  const { isRunning, startTimer, pauseTimer, isScreenLocked, formattedTime, mode, phase, unlockScreen } = useTimer();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
 
   // Global keyboard-first shortcuts (S: start/pause timer, T: Today, M: Tests & Mistakes)
   useEffect(() => {
@@ -140,6 +143,63 @@ const AppContent: React.FC = () => {
 
       {/* Toast Notifications */}
       <ToastContainer />
+
+      {/* Strict Focus Lock Overlay (Requires PIN to unlock) */}
+      {isScreenLocked && (
+        <div className="fixed inset-0 z-[100] bg-[#0B1120] text-white flex flex-col items-center justify-center p-6 text-center select-none">
+          <div className="max-w-sm w-full space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Focus Lock Active</span>
+            </div>
+
+            <div>
+              <div className="text-6xl font-black font-mono tracking-tight tabular-nums">
+                {formattedTime}
+              </div>
+              <div className="text-xs text-slate-400 mt-2 uppercase tracking-wider font-semibold">
+                {mode === 'Pomodoro' ? (phase === 'focus' ? 'Deep Focus' : 'Break') : 'Deep Stopwatch'}
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (unlockScreen(pinInput)) {
+                  setPinInput('');
+                  setPinError(false);
+                } else {
+                  setPinError(true);
+                }
+              }}
+              className="space-y-3 pt-4 border-t border-slate-800"
+            >
+              <p className="text-xs text-slate-400">
+                Enter your Focus Lock PIN to unlock screen controls
+              </p>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value);
+                  setPinError(false);
+                }}
+                placeholder="Enter PIN..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-center text-sm font-mono tracking-widest text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {pinError && (
+                <p className="text-xs text-rose-400 font-semibold">Incorrect PIN. Stay focused!</p>
+              )}
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+              >
+                Unlock Focus Screen
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
