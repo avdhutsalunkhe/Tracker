@@ -162,6 +162,9 @@ export const TopicDetailPage: React.FC = () => {
     }
   }, [startDate, coveredDate]);
 
+  const subtopicStats = useMemo(() => countSubtopics(subtopics), [subtopics]);
+  const flatSubtopicTitles = useMemo(() => flattenSubtopicTitles(subtopics), [subtopics]);
+
   if (!topic) {
     return (
       <div className="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder text-center space-y-4">
@@ -233,9 +236,6 @@ export const TopicDetailPage: React.FC = () => {
     ]);
     setNewSubtopicTitle('');
   };
-
-  const subtopicStats = useMemo(() => countSubtopics(subtopics), [subtopics]);
-  const flatSubtopicTitles = useMemo(() => flattenSubtopicTitles(subtopics), [subtopics]);
 
   const toggleSubtopicDone = (id: string) => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
