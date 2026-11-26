@@ -4,7 +4,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
-import { uploadFormulaImage } from '../lib/studyDocuments';
+import { uploadFormulaImage, uploadStudyDocument } from '../lib/studyDocuments';
 import { MistakeCategory, TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { MathText } from '../components/common/MathText';
@@ -76,6 +76,8 @@ export const TopicDetailPage: React.FC = () => {
   const [newSubtopicTitle, setNewSubtopicTitle] = useState('');
   const [addingChildForId, setAddingChildForId] = useState<string | null>(null);
   const [newChildTitle, setNewChildTitle] = useState('');
+  const [uploadSubtopicTarget, setUploadSubtopicTarget] = useState<string | null>(null);
+  const subtopicFileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<TopicStatus>('Not Started');
   const [confidence, setConfidence] = useState(3);
   const [pyqsSolved, setPyqsSolved] = useState(0);
@@ -281,6 +283,48 @@ export const TopicDetailPage: React.FC = () => {
     persistSubtopics(removeSubtopicInTree(subtopics, id));
   };
 
+  const handleSubtopicFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const targetSub = uploadSubtopicTarget;
+    e.target.value = '';
+    if (!file || !topic || !targetSub) return;
+
+    if (!user?.id) {
+      showToast({
+        type: 'error',
+        title: 'Sign In Required',
+        message: 'Sign in with your Supabase account to upload separate subtopic files.',
+      });
+      return;
+    }
+
+    try {
+      const prefixedName = `[${targetSub}] ${file.name}`;
+      const renamedFile = new File([file], prefixedName, { type: file.type });
+      await uploadStudyDocument({
+        userId: user.id,
+        file: renamedFile,
+        paper: 'DA',
+        subjectId: topic.subject_id,
+        topicId: topic.id,
+        category: 'Notes',
+      });
+      showToast({
+        type: 'success',
+        title: 'Subtopic File Uploaded',
+        message: `"${file.name}" saved as a separate file for "${targetSub}" in Notes.`,
+      });
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: (err as Error).message,
+      });
+    } finally {
+      setUploadSubtopicTarget(null);
+    }
+  };
+
   const renderSubtopicNode = (sub: SubtopicItem, depth = 0): React.ReactNode => (
     <div key={sub.id} className={depth > 0 ? 'ml-4 sm:ml-6 pl-3 border-l-2 border-indigo-200 dark:border-indigo-900 space-y-1.5' : 'space-y-1.5'}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs">
@@ -304,6 +348,18 @@ export const TopicDetailPage: React.FC = () => {
         </button>
 
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setUploadSubtopicTarget(sub.title);
+              subtopicFileInputRef.current?.click();
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 text-[10px] font-semibold hover:bg-indigo-100"
+            title={`Upload separate .md / .pdf file for ${sub.title}`}
+          >
+            <Upload className="w-3 h-3" />
+            <span>Upload .md</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -575,6 +631,13 @@ export const TopicDetailPage: React.FC = () => {
 
           {subtopics.length > 0 && (
             <div className="space-y-2 pt-1">
+              <input
+                ref={subtopicFileInputRef}
+                type="file"
+                accept=".md,.markdown,.txt,.pdf,.ppt,.pptx"
+                onChange={handleSubtopicFileUpload}
+                className="hidden"
+              />
               {subtopics.map((sub) => renderSubtopicNode(sub, 0))}
             </div>
           )}
