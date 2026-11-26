@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MathText } from './MathText';
 import { getStudyDocumentUrl } from '../../lib/studyDocuments';
 
 const FormulaImage: React.FC<{ storagePath: string }> = ({ storagePath }) => {
+  const navigate = useNavigate();
   const [url, setUrl] = useState<string>('');
 
   useEffect(() => {
@@ -26,13 +28,26 @@ const FormulaImage: React.FC<{ storagePath: string }> = ({ storagePath }) => {
   }
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block my-2">
+    <button
+      type="button"
+      onClick={() =>
+        navigate('/viewer', {
+          state: {
+            storagePath,
+            title: 'Formula Image',
+            fileType: storagePath.split('.').pop()?.toLowerCase() || 'image',
+          },
+        })
+      }
+      className="block my-2 text-left cursor-pointer focus:outline-none"
+      title="Tap to view full screen"
+    >
       <img
         src={url}
         alt="Formula reference"
-        className="max-h-64 w-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain bg-white dark:bg-slate-950"
+        className="max-h-64 w-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain bg-white dark:bg-slate-950 hover:opacity-95 transition-opacity"
       />
-    </a>
+    </button>
   );
 };
 

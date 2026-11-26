@@ -49,10 +49,15 @@ export const DocumentViewerPage: React.FC = () => {
     };
   }, [storagePath]);
 
+  const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'image'].includes(
+    fileType
+  );
+
   // Embedded viewer URL prevents Android/mobile browsers from forcing a file download
-  const viewerSrc = signedUrl
-    ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(signedUrl)}`
-    : '';
+  const viewerSrc =
+    signedUrl && !isImage
+      ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(signedUrl)}`
+      : '';
 
   return (
     <div className="space-y-3 animate-in fade-in duration-200 flex flex-col h-[calc(100vh-8rem)]">
@@ -100,6 +105,14 @@ export const DocumentViewerPage: React.FC = () => {
           </div>
         ) : error ? (
           <div className="p-6 text-center text-xs text-rose-500">{error}</div>
+        ) : isImage ? (
+          <div className="w-full h-full overflow-auto flex items-center justify-center p-3 bg-slate-50 dark:bg-slate-950">
+            <img
+              src={signedUrl}
+              alt={title}
+              className="max-w-full max-h-full object-contain rounded-xl shadow-sm"
+            />
+          </div>
         ) : (
           <iframe
             title={title}
