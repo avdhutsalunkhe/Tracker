@@ -1,5 +1,9 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { AllottedSlot } from '../types';
+import {
+  showNativeTimerNotification,
+  clearNativeTimerNotification,
+} from './nativeFocus';
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
 
@@ -57,6 +61,12 @@ export async function updateActiveTimerNotification(params: {
   isRunning: boolean;
   silent?: boolean;
 }): Promise<void> {
+  const handledNative = await showNativeTimerNotification(
+    params.title,
+    params.body,
+    params.isRunning
+  );
+  if (handledNative) return;
   if (!isPushSupported() || Notification.permission !== 'granted') return;
   try {
     const reg = await navigator.serviceWorker.ready;
@@ -80,6 +90,8 @@ export async function updateActiveTimerNotification(params: {
 }
 
 export async function clearActiveTimerNotification(): Promise<void> {
+  const handledNative = await clearNativeTimerNotification();
+  if (handledNative) return;
   if (!isPushSupported()) return;
   try {
     const reg = await navigator.serviceWorker.ready;

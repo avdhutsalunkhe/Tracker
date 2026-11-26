@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useTimer } from '../../context/TimerContext';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
+import { isNativeAndroid, openNativeDndSettings } from '../../lib/nativeFocus';
 import { FocusQuality } from '../../types';
 import {
   Play,
@@ -33,13 +35,17 @@ export const TimerDisplay: React.FC = () => {
     setFocusLockEnabled,
     focusPin,
     setFocusPin,
+    lockScreenNow,
   } = useTimer();
 
   const { subjects, topics } = useData();
+  const { showToast } = useToast();
   const [showQualityPicker, setShowQualityPicker] = useState(false);
   const [showDndModal, setShowDndModal] = useState(false);
+  const [needsDndPerm, setNeedsDndPerm] = useState(false);
 
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  const nativeAndroid = isNativeAndroid();
 
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
   const selectedTopic = topics.find((t) => t.id === selectedTopicId);
@@ -267,10 +273,25 @@ export const TimerDisplay: React.FC = () => {
             </div>
 
             <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/70 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-              Web browsers cannot directly toggle your phone&apos;s system Do Not Disturb or block notifications from other apps (WhatsApp, Instagram) due to OS security. Use the 1-tap DND shortcut below together with Focus Lock.
+              {nativeAndroid
+                ? 'Starting Focus Lock & DND needs NO password. Once locked, switching apps is blocked by Android Screen Pinning and your PIN is required to stop & unlock.'
+                : 'Starting Focus Lock needs NO password. Your PIN is only required to unlock. On Android APK, Screen Pinning & automatic DND block switching apps and silence WhatsApp/Instagram.'}
             </div>
 
-            {isAndroid ? (
+            {nativeAndroid ? (
+              <button
+                type="button"
+                onClick={() => openNativeDndSettings()}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>
+                  {needsDndPerm
+                    ? 'Grant Do Not Disturb Access to Avdhut'
+                    : 'Phone Do Not Disturb Access Settings'}
+                </span>
+              </button>
+            ) : isAndroid ? (
               <a
                 href="intent:#Intent;action=android.settings.ZEN_MODE_SETTINGS;end"
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
@@ -301,7 +322,7 @@ export const TimerDisplay: React.FC = () => {
 
               {focusLockEnabled && (
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-slate-500 dark:text-slate-400">Unlock PIN:</span>
+                  <span className="text-slate-500 dark:text-slate-400">PIN to Stop / Unlock:</span>
                   <input
                     type="password"
                     value={focusPin}
@@ -321,19 +342,36 @@ export const TimerDisplay: React.FC = () => {
               >
                 Close
               </button>
-              {!isRunning && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDndModal(false);
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await lockScreenNow();
+                  if (!isRunning) {
                     startTimer();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Start Locked Focus</span>
-                </button>
-              )}
+                  }
+                  if (res.needsDndPermission) {
+                    setNeedsDndPerm(true);
+                    showToast({
+                      type: 'info',
+                      title: 'Allow DND Access',
+                      message: 'Enable Do Not Disturb access for Avdhut so it can silence other apps automatically.',
+                    });
+                  } else {
+                    setShowDndModal(false);
+                    showToast({
+                      type: 'success',
+                      title: 'Focus Lock Active',
+                      message: res.dndEnabled
+                        ? 'Screen locked and Do Not Disturb enabled. PIN required to unlock.'
+                        : 'Screen locked. Enter your PIN to stop & unlock.',
+                    });
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>{isRunning ? 'Lock Screen & DND Now' : 'Start Locked Focus & DND'}</span>
+              </button>
             </div>
           </div>
         </div>

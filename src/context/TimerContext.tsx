@@ -3,6 +3,7 @@ import { TimerMode, PomodoroPhase, FocusQuality } from '../types';
 import { useData } from './DataContext';
 import { sound } from '../lib/sound';
 import { updateActiveTimerNotification, clearActiveTimerNotification } from '../lib/pushNotifications';
+import { startNativeFocusLock, stopNativeFocusLock } from '../lib/nativeFocus';
 
 interface TimerContextType {
   mode: TimerMode;
@@ -40,6 +41,7 @@ interface TimerContextType {
   setFocusPin: (pin: string) => void;
   isScreenLocked: boolean;
   unlockScreen: (enteredPin: string) => boolean;
+  lockScreenNow: () => Promise<{ dndEnabled: boolean; needsDndPermission: boolean }>;
 
   // Formatted helpers
   formattedTime: string;
@@ -166,12 +168,22 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const unlockScreen = (enteredPin: string): boolean => {
     if (enteredPin.trim() === focusPin) {
       setIsScreenLocked(false);
+      stopNativeFocusLock();
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
       return true;
     }
     return false;
+  };
+
+  const lockScreenNow = async (): Promise<{ dndEnabled: boolean; needsDndPermission: boolean }> => {
+    setFocusLockEnabled(true);
+    setIsScreenLocked(true);
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    return startNativeFocusLock();
   };
 
   // Timestamp refs so background browser throttling & page refreshes never lose time
@@ -339,6 +351,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsRunning(true);
     if (focusLockEnabled) {
       setIsScreenLocked(true);
+      startNativeFocusLock();
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
@@ -430,7 +443,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isRunning: true,
       silent: true,
     });
-  }, [isRunning, mode, phase, Math.floor(currentSeconds / 15)]);
+  }, [isRunning, mode, phase, Math.floor(currentSeconds / 5)]);
 
   // Listen to notification shade action buttons (Pause / Stop & Save)
   useEffect(() => {
@@ -499,6 +512,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setFocusPin,
         isScreenLocked,
         unlockScreen,
+        lockScreenNow,
         formattedTime,
         progressPercent,
       }}
