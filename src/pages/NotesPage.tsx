@@ -165,18 +165,47 @@ export const NotesPage: React.FC = () => {
 
   const activeSubject = activeTopic ? subjectMap.get(activeTopic.subject_id) || null : null;
 
-  // Separate uploaded files belonging to activeTopic
+  // Separate uploaded files belonging to activeTopic (filtered by selectedSubtopicTitle if selected)
   const activeTopicDocs = useMemo(() => {
     if (!activeTopic) return [];
-    return cloudDocs.filter(
+    const topicFiles = cloudDocs.filter(
       (d) => d.category === 'Notes' && d.topic_id === activeTopic.id
     );
-  }, [cloudDocs, activeTopic]);
+    if (!selectedSubtopicTitle) return topicFiles;
 
-  // Pick default active file tab when switching topics
+    const subLower = selectedSubtopicTitle.trim().toLowerCase();
+    const stem = subLower.length >= 4 ? subLower.slice(0, 4) : subLower;
+    const tagPrefix = `[${subLower}]`;
+
+    return topicFiles.filter((d) => {
+      const titleLower = d.title.toLowerCase();
+      const nameLower = d.file_name.toLowerCase();
+      // If file has an explicit [subtopic] tag, match it strictly
+      if (titleLower.startsWith('[')) {
+        return titleLower.startsWith(tagPrefix);
+      }
+      // Otherwise match by subtopic name or stem (e.g. "dict" for Dictionary, "func" for Function)
+      return (
+        titleLower.includes(subLower) ||
+        nameLower.includes(subLower) ||
+        titleLower.includes(stem) ||
+        nameLower.includes(stem)
+      );
+    });
+  }, [cloudDocs, activeTopic, selectedSubtopicTitle]);
+
+  // Pick default active file tab when switching topics or subtopics
   useEffect(() => {
     setIsEditingInline(false);
     if (!activeTopic) return;
+    if (selectedSubtopicTitle) {
+      if (activeTopicDocs.length > 0) {
+        setActiveFileId(activeTopicDocs[0].id);
+      } else {
+        setActiveFileId('__inline__');
+      }
+      return;
+    }
     if (activeTopicDocs.length > 0 && !activeTopic.notes?.trim()) {
       setActiveFileId(activeTopicDocs[0].id);
     } else if (activeTopic.notes?.trim()) {
@@ -186,7 +215,7 @@ export const NotesPage: React.FC = () => {
     } else {
       setActiveFileId('__inline__');
     }
-  }, [activeTopic?.id]);
+  }, [activeTopic?.id, selectedSubtopicTitle, activeTopicDocs.length]);
 
   // Load .md text from Supabase Storage when a cloud .md file tab is selected
   useEffect(() => {
@@ -240,9 +269,12 @@ export const NotesPage: React.FC = () => {
       let lastDoc: StudyDocument | null = null;
 
       for (const file of files) {
+        const targetFile = selectedSubtopicTitle
+          ? new File([file], `[${selectedSubtopicTitle}] ${file.name}`, { type: file.type })
+          : file;
         const doc = await uploadStudyDocument({
           userId,
-          file,
+          file: targetFile,
           paper,
           subjectId: activeTopic.subject_id,
           topicId: activeTopic.id,
