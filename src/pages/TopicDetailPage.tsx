@@ -222,47 +222,54 @@ export const TopicDetailPage: React.FC = () => {
     }
   };
 
+  const persistSubtopics = (next: SubtopicItem[]) => {
+    setSubtopics(next);
+    if (topic) {
+      updateTopic(topic.id, { subtopic: serializeSubtopics(next) });
+    }
+  };
+
   const handleAddSubtopic = () => {
     const clean = newSubtopicTitle.trim();
     if (!clean) return;
-    setSubtopics((prev) => [
-      ...prev,
+    const next: SubtopicItem[] = [
+      ...subtopics,
       {
         id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
         title: clean,
         done: false,
         covered_date: null,
       },
-    ]);
+    ];
+    persistSubtopics(next);
     setNewSubtopicTitle('');
   };
 
   const toggleSubtopicDone = (id: string) => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    setSubtopics((prev) => toggleSubtopicInTree(prev, id, todayStr));
+    persistSubtopics(toggleSubtopicInTree(subtopics, id, todayStr));
   };
 
   const updateSubtopicDate = (id: string, dateValue: string) => {
-    setSubtopics((prev) => updateSubtopicDateInTree(prev, id, dateValue));
+    persistSubtopics(updateSubtopicDateInTree(subtopics, id, dateValue));
   };
 
   const handleAddChildSubtopic = (parentId: string) => {
     const clean = newChildTitle.trim();
     if (!clean) return;
-    setSubtopics((prev) =>
-      addChildSubtopicInTree(prev, parentId, {
-        id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-        title: clean,
-        done: false,
-        covered_date: null,
-      })
-    );
+    const next = addChildSubtopicInTree(subtopics, parentId, {
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      title: clean,
+      done: false,
+      covered_date: null,
+    });
+    persistSubtopics(next);
     setNewChildTitle('');
     setAddingChildForId(null);
   };
 
   const removeSubtopic = (id: string) => {
-    setSubtopics((prev) => removeSubtopicInTree(prev, id));
+    persistSubtopics(removeSubtopicInTree(subtopics, id));
   };
 
   const renderSubtopicNode = (sub: SubtopicItem, depth = 0): React.ReactNode => (
