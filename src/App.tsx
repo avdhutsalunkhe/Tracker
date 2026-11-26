@@ -29,6 +29,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SyllabusPage } from './pages/SyllabusPage';
 import { TopicDetailPage } from './pages/TopicDetailPage';
+import { SubjectDetailPage } from './pages/SubjectDetailPage';
 import { TimetablePage } from './pages/TimetablePage';
 
 const AppContent: React.FC = () => {
@@ -112,6 +113,7 @@ const AppContent: React.FC = () => {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/timetable" element={<TimetablePage />} />
             <Route path="/gate" element={<GatePage />} />
+            <Route path="/gate/subject/:subjectId" element={<SubjectDetailPage />} />
             <Route path="/gate/topic/:topicId" element={<TopicDetailPage />} />
             <Route path="/syllabus" element={<SyllabusPage />} />
             <Route path="/revisions" element={<RevisionsPage />} />

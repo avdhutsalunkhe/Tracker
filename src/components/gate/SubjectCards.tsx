@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { GateSubject } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -19,6 +20,7 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
   onOpenSeedModal,
   onEditSubject,
 }) => {
+  const navigate = useNavigate();
   const { subjects, topics, revisions, sessions, deleteSubject } = useData();
   const [subjectToDelete, setSubjectToDelete] = useState<GateSubject | null>(null);
 
@@ -123,7 +125,7 @@ export const SubjectCards: React.FC<SubjectCardsProps> = ({
             return (
               <div
                 key={item.subject.id}
-                onClick={() => onSelectSubject(isSelected ? null : item.subject.id)}
+                onClick={() => navigate(`/gate/subject/${item.subject.id}`)}
                 className={`group p-4 rounded-2xl border transition-all cursor-pointer relative select-none flex flex-col justify-between ${isSelected
                     ? 'ring-2 ring-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-400 dark:border-indigo-600 shadow-sm'
                     : 'bg-white dark:bg-darkCard border-lightBorder dark:border-darkBorder hover:border-indigo-400/60 dark:hover:border-indigo-500/60'
