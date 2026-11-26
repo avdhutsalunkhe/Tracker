@@ -1,9 +1,19 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import { GATE_SYLLABUS_PAPERS } from '../lib/syllabusData';
 import { MarkdownRenderer } from '../components/common/MarkdownRenderer';
+import {
+  StudyDocument,
+  getCachedStudyDocuments,
+  fetchStudyDocuments,
+  uploadStudyDocument,
+  getStudyDocumentUrl,
+  deleteStudyDocument,
+  formatFileSize,
+} from '../lib/studyDocuments';
 import {
   FileText,
   Upload,
@@ -14,6 +24,7 @@ import {
   Eye,
   Save,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 
 const SUBJECT_PAPER_MAP_KEY = 'avdhut_subject_paper_map_v1';
@@ -51,18 +62,35 @@ function loadSubjectPaperMap(): Record<string, 'DA' | 'CS'> {
 
 export const NotesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { subjects, topics, updateTopic } = useData();
   const { showToast } = useToast();
+  const userId = user?.id || '';
 
   const [paperFilter, setPaperFilter] = useState<'ALL' | 'DA' | 'CS'>('ALL');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [subjectPaperMap, setSubjectPaperMap] = useState<Record<string, 'DA' | 'CS'>>(loadSubjectPaperMap);
+  const [cloudDocs, setCloudDocs] = useState<StudyDocument[]>(() =>
+    getCachedStudyDocuments(userId)
+  );
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
-  // Quick .md upload target
+  // Quick .md / .pdf / .ppt upload target
   const [uploadSubjectId, setUploadSubjectId] = useState<string>('');
   const [uploadTopicId, setUploadTopicId] = useState<string>('');
   const mdInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setCloudDocs([]);
+      return;
+    }
+    setCloudDocs(getCachedStudyDocuments(userId));
+    fetchStudyDocuments(userId)
+      .then((fresh) => setCloudDocs(fresh))
+      .catch(() => {});
+  }, [userId]);
 
   // Inline edit state per topic
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
@@ -122,6 +150,52 @@ export const NotesPage: React.FC = () => {
   const handleQuickUploadMd = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isMarkdown = ['md', 'markdown', 'txt'].includes(ext);
+
+    if (!isMarkdown) {
+      // Upload PDF / PPT / PPTX directly to Supabase Storage (never local)
+      if (!userId) {
+        showToast({
+          type: 'error',
+          title: 'Sign In Required',
+          message: 'Sign in with your Supabase account to upload PDF/PPT files.',
+        });
+        e.target.value = '';
+        return;
+      }
+      setUploadingDoc(true);
+      try {
+        const subj = subjects.find((s) => s.id === uploadSubjectId);
+        const paper = subj ? getSubjectPaper(subj.id, subj.name) : 'DA';
+        const doc = await uploadStudyDocument({
+          userId,
+          file,
+          paper,
+          subjectId: uploadSubjectId || null,
+          topicId: uploadTopicId || null,
+          category: 'Notes',
+        });
+        setCloudDocs((prev) => [doc, ...prev]);
+        showToast({
+          type: 'success',
+          title: 'Document Uploaded to Supabase',
+          message: `"${file.name}" saved in Supabase Storage.`,
+        });
+      } catch (err: unknown) {
+        showToast({
+          type: 'error',
+          title: 'Upload Failed',
+          message: (err as Error).message,
+        });
+      } finally {
+        setUploadingDoc(false);
+        e.target.value = '';
+      }
+      return;
+    }
+
     if (!uploadTopicId) {
       showToast({
         type: 'error',
@@ -142,6 +216,19 @@ export const NotesPage: React.FC = () => {
         ? `${target.notes.trim()}\n\n---\n\n${text}`
         : text;
       await updateTopic(target.id, { notes: nextNotes });
+      if (userId) {
+        const subj = subjects.find((s) => s.id === uploadSubjectId);
+        const paper = subj ? getSubjectPaper(subj.id, subj.name) : 'DA';
+        const doc = await uploadStudyDocument({
+          userId,
+          file,
+          paper,
+          subjectId: uploadSubjectId || null,
+          topicId: uploadTopicId || null,
+          category: 'Notes',
+        }).catch(() => null);
+        if (doc) setCloudDocs((prev) => [doc, ...prev]);
+      }
       showToast({
         type: 'success',
         title: 'Markdown Note Saved',
@@ -157,6 +244,19 @@ export const NotesPage: React.FC = () => {
       e.target.value = '';
     }
   };
+
+  const noteCloudDocs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return cloudDocs.filter((d) => {
+      if (d.category !== 'Notes') return false;
+      if (paperFilter !== 'ALL' && d.paper !== paperFilter) return false;
+      if (selectedSubjectId !== 'ALL' && d.subject_id !== selectedSubjectId) return false;
+      if (q) {
+        return d.title.toLowerCase().includes(q) || d.file_name.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [cloudDocs, paperFilter, selectedSubjectId, searchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -234,17 +334,18 @@ export const NotesPage: React.FC = () => {
             <input
               ref={mdInputRef}
               type="file"
-              accept=".md,.markdown,.txt"
+              accept=".md,.markdown,.txt,.pdf,.ppt,.pptx"
               onChange={handleQuickUploadMd}
               className="hidden"
             />
             <button
               type="button"
+              disabled={uploadingDoc}
               onClick={() => mdInputRef.current?.click()}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-60"
             >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Upload .md File</span>
+              {uploadingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <span>{uploadingDoc ? 'Uploading...' : 'Upload .md / .pdf / .ppt'}</span>
             </button>
           </div>
         </div>
@@ -291,6 +392,76 @@ export const NotesPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Uploaded Cloud Documents (.pdf, .ppt, .md in Supabase Storage) */}
+      {noteCloudDocs.length > 0 && (
+        <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-5 shadow-sm space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            Cloud Documents ({noteCloudDocs.length}) — Supabase Storage
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {noteCloudDocs.map((doc) => {
+              const subj = doc.subject_id ? subjectMap.get(doc.subject_id) : null;
+              return (
+                <div
+                  key={doc.id}
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {doc.title}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300">
+                        {doc.file_type}
+                      </span>
+                      {subj && (
+                        <span className="text-[10px] text-slate-500">{subj.name}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 tabular-nums">
+                      {formatFileSize(doc.file_size)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const url = await getStudyDocumentUrl(doc.storage_path);
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        } catch (err: unknown) {
+                          showToast({
+                            type: 'error',
+                            title: 'Open Failed',
+                            message: (err as Error).message,
+                          });
+                        }
+                      }}
+                      className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                      title="Open / Download from Supabase"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await deleteStudyDocument(userId, doc);
+                        setCloudDocs((prev) => prev.filter((d) => d.id !== doc.id));
+                        showToast({ type: 'info', title: 'Document Deleted' });
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500"
+                      title="Delete from Supabase"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Notes Cards grouped by Topic */}
       {filteredTopics.length === 0 ? (

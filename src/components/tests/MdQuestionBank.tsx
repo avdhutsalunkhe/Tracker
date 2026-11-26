@@ -1,8 +1,21 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { ConfirmModal } from '../common/ConfirmModal';
+import {
+  StudyDocument,
+  StudyDocCategory,
+  getCachedStudyDocuments,
+  fetchStudyDocuments,
+  uploadStudyDocument,
+  getStudyDocumentUrl,
+  fetchStudyDocumentText,
+  toggleStudyDocumentSolved,
+  deleteStudyDocument,
+  formatFileSize,
+} from '../../lib/studyDocuments';
 import {
   FileText,
   Upload,
@@ -12,24 +25,14 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 
-export type QuestionBankCategory = 'DPP' | 'Practice Questions' | 'Test Questions';
-
-export interface MdQuestionSet {
-  id: string;
-  category: QuestionBankCategory;
-  paper: 'DA' | 'CS';
-  subject_id?: string | null;
-  subject_name: string;
-  topic_name?: string | null;
-  title: string;
-  content: string;
-  solved: boolean;
-  created_at: string;
-}
-
-const STORAGE_KEY = 'avdhut_md_question_bank_v1';
+export type QuestionBankCategory = Extract<
+  StudyDocCategory,
+  'DPP' | 'Practice Questions' | 'Test Questions'
+>;
 
 const CATEGORIES: QuestionBankCategory[] = [
   'DPP',
@@ -37,41 +40,54 @@ const CATEGORIES: QuestionBankCategory[] = [
   'Test Questions',
 ];
 
-function loadSets(): MdQuestionSet[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 export const MdQuestionBank: React.FC = () => {
+  const { user } = useAuth();
   const { subjects, topics } = useData();
   const { showToast } = useToast();
 
-  const [sets, setSets] = useState<MdQuestionSet[]>(loadSets);
+  const userId = user?.id || '';
+  const [docs, setDocs] = useState<StudyDocument[]>(() =>
+    getCachedStudyDocuments(userId)
+  );
   const [activeCategory, setActiveCategory] = useState<QuestionBankCategory>('DPP');
   const [paperFilter, setPaperFilter] = useState<'ALL' | 'DA' | 'CS'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Upload metadata state
   const [uploadPaper, setUploadPaper] = useState<'DA' | 'CS'>('DA');
   const [uploadSubjectId, setUploadSubjectId] = useState<string>('');
-  const [uploadTopicName, setUploadTopicName] = useState<string>('');
+  const [uploadTopicId, setUploadTopicId] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [setToDelete, setSetToDelete] = useState<MdQuestionSet | null>(null);
+  const [mdContentMap, setMdContentMap] = useState<Record<string, string>>({});
+  const [loadingMdId, setLoadingMdId] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<StudyDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
-    } catch {
-      // Ignore quota errors
+    if (!userId) {
+      setDocs([]);
+      return;
     }
-  }, [sets]);
+    setDocs(getCachedStudyDocuments(userId));
+    fetchStudyDocuments(userId)
+      .then((fresh) => setDocs(fresh))
+      .catch(() => {
+        // Keep cached metadata if offline
+      });
+  }, [userId]);
+
+  const subjectMap = useMemo(() => {
+    const map = new Map<string, string>();
+    subjects.forEach((s) => map.set(s.id, s.name));
+    return map;
+  }, [subjects]);
+
+  const topicMap = useMemo(() => {
+    const map = new Map<string, string>();
+    topics.forEach((t) => map.set(t.id, t.topic_name));
+    return map;
+  }, [topics]);
 
   const subjectTopics = useMemo(() => {
     if (!uploadSubjectId) return [];
@@ -84,95 +100,143 @@ export const MdQuestionBank: React.FC = () => {
       'Practice Questions': 0,
       'Test Questions': 0,
     };
-    for (const item of sets) {
-      if (counts[item.category] !== undefined) counts[item.category] += 1;
+    for (const item of docs) {
+      if (item.category in counts) {
+        counts[item.category as QuestionBankCategory] += 1;
+      }
     }
     return counts;
-  }, [sets]);
+  }, [docs]);
 
-  const filteredSets = useMemo(() => {
+  const filteredDocs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return sets.filter((s) => {
-      if (s.category !== activeCategory) return false;
-      if (paperFilter !== 'ALL' && s.paper !== paperFilter) return false;
+    return docs.filter((d) => {
+      if (d.category !== activeCategory) return false;
+      if (paperFilter !== 'ALL' && d.paper !== paperFilter) return false;
       if (q) {
+        const subjName = d.subject_id ? subjectMap.get(d.subject_id) || '' : '';
+        const topicName = d.topic_id ? topicMap.get(d.topic_id) || '' : '';
         return (
-          s.title.toLowerCase().includes(q) ||
-          s.subject_name.toLowerCase().includes(q) ||
-          (s.topic_name || '').toLowerCase().includes(q) ||
-          s.content.toLowerCase().includes(q)
+          d.title.toLowerCase().includes(q) ||
+          d.file_name.toLowerCase().includes(q) ||
+          subjName.toLowerCase().includes(q) ||
+          topicName.toLowerCase().includes(q)
         );
       }
       return true;
     });
-  }, [sets, activeCategory, paperFilter, searchQuery]);
+  }, [docs, activeCategory, paperFilter, searchQuery, subjectMap, topicMap]);
 
-  const handleUploadMd = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const selectedSubj = subjects.find((s) => s.id === uploadSubjectId);
-    const created: MdQuestionSet[] = [];
-
-    for (const file of files) {
-      try {
-        const text = (await file.text()).trim();
-        if (!text) continue;
-        const cleanTitle = file.name.replace(/\.(md|markdown|txt)$/i, '').trim() || activeCategory;
-        created.push({
-          id: `qset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          category: activeCategory,
-          paper: uploadPaper,
-          subject_id: selectedSubj?.id || null,
-          subject_name: selectedSubj?.name || 'General',
-          topic_name: uploadTopicName || null,
-          title: cleanTitle,
-          content: text,
-          solved: false,
-          created_at: new Date().toISOString(),
-        });
-      } catch {
-        // Skip unreadable file
-      }
+    if (!userId) {
+      showToast({
+        type: 'error',
+        title: 'Sign In Required',
+        message: 'Sign in with your Supabase account to upload files to cloud storage.',
+      });
+      e.target.value = '';
+      return;
     }
 
-    if (created.length > 0) {
-      setSets((prev) => [...created, ...prev]);
-      setExpandedId(created[0].id);
-      showToast({
-        type: 'success',
-        title: `${activeCategory} Uploaded`,
-        message: `Added ${created.length} .md file${created.length === 1 ? '' : 's'}.`,
-      });
-    } else {
+    setUploading(true);
+    let uploadedCount = 0;
+    try {
+      for (const file of files) {
+        const doc = await uploadStudyDocument({
+          userId,
+          file,
+          paper: uploadPaper,
+          subjectId: uploadSubjectId || null,
+          topicId: uploadTopicId || null,
+          category: activeCategory,
+        });
+        setDocs((prev) => [doc, ...prev]);
+        uploadedCount += 1;
+      }
+      if (uploadedCount > 0) {
+        showToast({
+          type: 'success',
+          title: `${activeCategory} Uploaded`,
+          message: `Saved ${uploadedCount} file${uploadedCount === 1 ? '' : 's'} to Supabase Storage.`,
+        });
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
       showToast({
         type: 'error',
         title: 'Upload Failed',
-        message: 'Selected .md file was empty or unreadable.',
+        message: error.message || 'Could not upload to Supabase Storage.',
       });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
     }
-    e.target.value = '';
   };
 
-  const toggleSolved = (id: string) => {
-    setSets((prev) => prev.map((s) => (s.id === id ? { ...s, solved: !s.solved } : s)));
+  const handleToggleExpand = async (doc: StudyDocument) => {
+    if (expandedId === doc.id) {
+      setExpandedId(null);
+      return;
+    }
+    const isMarkdown = ['md', 'markdown', 'txt'].includes(doc.file_type.toLowerCase());
+    if (!isMarkdown) {
+      try {
+        const url = await getStudyDocumentUrl(doc.storage_path);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (err: unknown) {
+        showToast({
+          type: 'error',
+          title: 'Cannot Open File',
+          message: (err as Error).message,
+        });
+      }
+      return;
+    }
+
+    setExpandedId(doc.id);
+    if (!mdContentMap[doc.id]) {
+      setLoadingMdId(doc.id);
+      try {
+        const text = await fetchStudyDocumentText(doc.storage_path);
+        setMdContentMap((prev) => ({ ...prev, [doc.id]: text }));
+      } catch (err: unknown) {
+        showToast({
+          type: 'error',
+          title: 'Load Failed',
+          message: (err as Error).message,
+        });
+      } finally {
+        setLoadingMdId(null);
+      }
+    }
+  };
+
+  const handleToggleSolved = async (doc: StudyDocument) => {
+    const nextSolved = !doc.solved;
+    setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, solved: nextSolved } : d)));
+    try {
+      await toggleStudyDocumentSolved(userId, doc.id, nextSolved);
+    } catch {
+      setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, solved: doc.solved } : d)));
+    }
   };
 
   return (
     <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-6 shadow-sm space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-indigo-500" />
-            DPP, Practice &amp; Test Questions (.md Bank)
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Upload <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code> question sets for DPP, Practice Questions, and Test Questions — rendered like GitHub.
-          </p>
-        </div>
+      <div>
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-indigo-500" />
+          DPP, Practice &amp; Test Questions (Supabase Cloud)
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Upload <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code>, <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.pdf</code>, or <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.ppt/.pptx</code> files directly to Supabase Storage.
+        </p>
       </div>
 
-      {/* 3 Section Tabs: DPP | Practice Questions | Test Questions */}
+      {/* 3 Section Tabs */}
       <div className="grid grid-cols-3 gap-2">
         {CATEGORIES.map((cat) => {
           const active = activeCategory === cat;
@@ -211,7 +275,7 @@ export const MdQuestionBank: React.FC = () => {
           value={uploadSubjectId}
           onChange={(e) => {
             setUploadSubjectId(e.target.value);
-            setUploadTopicName('');
+            setUploadTopicId('');
           }}
           className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
         >
@@ -224,14 +288,14 @@ export const MdQuestionBank: React.FC = () => {
         </select>
 
         <select
-          value={uploadTopicName}
-          onChange={(e) => setUploadTopicName(e.target.value)}
+          value={uploadTopicId}
+          onChange={(e) => setUploadTopicId(e.target.value)}
           disabled={!uploadSubjectId}
           className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
         >
           <option value="">Any Topic</option>
           {subjectTopics.map((t) => (
-            <option key={t.id} value={t.topic_name}>
+            <option key={t.id} value={t.id}>
               {t.topic_name}
             </option>
           ))}
@@ -241,18 +305,19 @@ export const MdQuestionBank: React.FC = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt"
+            accept=".md,.markdown,.txt,.pdf,.ppt,.pptx"
             multiple
-            onChange={handleUploadMd}
+            onChange={handleUploadFiles}
             className="hidden"
           />
           <button
             type="button"
+            disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-60"
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Upload .md to {activeCategory === 'DPP' ? 'DPP' : activeCategory.split(' ')[0]}</span>
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            <span>{uploading ? 'Uploading...' : `Upload to ${activeCategory === 'DPP' ? 'DPP' : activeCategory.split(' ')[0]}`}</span>
           </button>
         </div>
       </div>
@@ -289,42 +354,52 @@ export const MdQuestionBank: React.FC = () => {
       </div>
 
       {/* List */}
-      {filteredSets.length === 0 ? (
+      {filteredDocs.length === 0 ? (
         <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-          No <span className="font-semibold">{activeCategory}</span> .md files uploaded yet.
+          No <span className="font-semibold">{activeCategory}</span> files uploaded to Supabase yet.
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredSets.map((item) => {
-            const isExpanded = expandedId === item.id;
+          {filteredDocs.map((doc) => {
+            const isExpanded = expandedId === doc.id;
+            const isMarkdown = ['md', 'markdown', 'txt'].includes(doc.file_type.toLowerCase());
+            const subjName = doc.subject_id ? subjectMap.get(doc.subject_id) || 'General' : 'General';
+            const topicName = doc.topic_id ? topicMap.get(doc.topic_id) : null;
+
             return (
               <div
-                key={item.id}
+                key={doc.id}
                 className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 overflow-hidden"
               >
                 <div className="p-3.5 flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
-                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    onClick={() => handleToggleExpand(doc)}
                     className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
                   >
                     <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`text-xs font-bold truncate ${item.solved ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
-                          {item.title}
+                        <span className={`text-xs font-bold truncate ${doc.solved ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                          {doc.title}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                          {doc.file_type}
                         </span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300">
-                          {item.paper === 'DA' ? 'DS' : 'CS'}
+                          {doc.paper === 'DA' ? 'DS' : 'CS'}
                         </span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
-                          {item.subject_name}
+                          {subjName}
                         </span>
-                        {item.topic_name && (
+                        {topicName && (
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                            · {item.topic_name}
+                            · {topicName}
                           </span>
                         )}
+                        <span className="text-[10px] text-slate-400 tabular-nums">
+                          {formatFileSize(doc.file_size)}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -332,29 +407,33 @@ export const MdQuestionBank: React.FC = () => {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => toggleSolved(item.id)}
+                      onClick={() => handleToggleSolved(doc)}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
-                        item.solved
+                        doc.solved
                           ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300'
                       }`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{item.solved ? 'Solved' : 'Mark Solved'}</span>
+                      <span>{doc.solved ? 'Solved' : 'Mark Solved'}</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                      onClick={() => handleToggleExpand(doc)}
                       className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200/60 dark:hover:bg-slate-700"
-                      title={isExpanded ? 'Collapse' : 'Read'}
+                      title={isMarkdown ? (isExpanded ? 'Collapse' : 'Read') : 'Open file'}
                     >
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      {isMarkdown ? (
+                        isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ExternalLink className="w-4 h-4" />
+                      )}
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setSetToDelete(item)}
+                      onClick={() => setDocToDelete(doc)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500"
                       title="Delete"
                     >
@@ -363,9 +442,16 @@ export const MdQuestionBank: React.FC = () => {
                   </div>
                 </div>
 
-                {isExpanded && (
+                {isExpanded && isMarkdown && (
                   <div className="p-4 border-t border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
-                    <MarkdownRenderer text={item.content} />
+                    {loadingMdId === doc.id ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Loading from Supabase Storage...</span>
+                      </div>
+                    ) : (
+                      <MarkdownRenderer text={mdContentMap[doc.id] || ''} />
+                    )}
                   </div>
                 )}
               </div>
@@ -375,16 +461,17 @@ export const MdQuestionBank: React.FC = () => {
       )}
 
       <ConfirmModal
-        isOpen={Boolean(setToDelete)}
-        onClose={() => setSetToDelete(null)}
-        onConfirm={() => {
-          if (setToDelete) {
-            setSets((prev) => prev.filter((s) => s.id !== setToDelete.id));
-            showToast({ type: 'info', title: 'Deleted Question Set' });
+        isOpen={Boolean(docToDelete)}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={async () => {
+          if (docToDelete) {
+            await deleteStudyDocument(userId, docToDelete);
+            setDocs((prev) => prev.filter((d) => d.id !== docToDelete.id));
+            showToast({ type: 'info', title: 'Deleted Document' });
           }
         }}
-        title="Delete Question Set"
-        message={`Delete "${setToDelete?.title}" from ${setToDelete?.category}?`}
+        title="Delete Document"
+        message={`Delete "${docToDelete?.title}" from Supabase Storage?`}
         confirmLabel="Delete"
       />
     </div>
