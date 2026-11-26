@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { MistakeCategory, TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { MathText } from '../components/common/MathText';
+import { MarkdownRenderer } from '../components/common/MarkdownRenderer';
 import { parseSubtopics, serializeSubtopics, SubtopicItem } from '../utils/subtopics';
 import {
   getStoredTopicStartDate,
@@ -26,6 +27,8 @@ import {
   FileText,
   Upload,
   Sparkles,
+  Eye,
+  Edit3,
 } from 'lucide-react';
 
 export const TopicDetailPage: React.FC = () => {
@@ -45,6 +48,7 @@ export const TopicDetailPage: React.FC = () => {
     deleteMistake,
     addFlashcard,
     deleteFlashcard,
+    clearAllFlashcards,
   } = useData();
   const { showToast } = useToast();
 
@@ -62,8 +66,11 @@ export const TopicDetailPage: React.FC = () => {
   const [coveredDate, setCoveredDate] = useState('');
   const [nextRevisionDate, setNextRevisionDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [notesTab, setNotesTab] = useState<'edit' | 'preview'>('edit');
+  const notesMdInputRef = useRef<HTMLInputElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmClearFormulasOpen, setConfirmClearFormulasOpen] = useState(false);
 
   // Mistake section state
   const [mistakeTitle, setMistakeTitle] = useState('');
@@ -91,6 +98,7 @@ export const TopicDetailPage: React.FC = () => {
     setCoveredDate(topic.covered_date || '');
     setNextRevisionDate(topic.next_revision_date || '');
     setNotes(topic.notes || '');
+    setNotesTab(topic.notes?.trim() ? 'preview' : 'edit');
   }, [topic]);
 
   const topicRevisions = useMemo(() => {
@@ -636,18 +644,98 @@ export const TopicDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Notes */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-            Short Notes / Formula Reminders
-          </label>
-          <textarea
-            rows={4}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Key formulas, edge-case conditions, or trap points..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        {/* Notes (GitHub Markdown + .md Upload) */}
+        <div className="space-y-2.5 p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Notes (GitHub Markdown)</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={notesMdInputRef}
+                type="file"
+                accept=".md,.markdown,.txt"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const text = await file.text();
+                    setNotes((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${text.trim()}` : text.trim()));
+                    setNotesTab('preview');
+                    showToast({
+                      type: 'success',
+                      title: 'Notes Imported',
+                      message: `Loaded "${file.name}" into Notes. Click Save Changes to persist.`,
+                    });
+                  } catch {
+                    showToast({
+                      type: 'error',
+                      title: 'Upload Failed',
+                      message: 'Could not read the selected .md file.',
+                    });
+                  } finally {
+                    e.target.value = '';
+                  }
+                }}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => notesMdInputRef.current?.click()}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+              >
+                <Upload className="w-3 h-3" />
+                <span>Upload .md</span>
+              </button>
+
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setNotesTab('edit')}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ${
+                    notesTab === 'edit'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNotesTab('preview')}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ${
+                    notesTab === 'preview'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Preview</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {notesTab === 'edit' ? (
+            <textarea
+              rows={6}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Write GitHub Markdown notes (# Headings, ```python code```, **bold**, tables, or $LaTeX$) or upload a .md file..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          ) : (
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[120px]">
+              {notes.trim() ? (
+                <MarkdownRenderer text={notes} />
+              ) : (
+                <p className="text-xs text-slate-400">No notes yet. Switch to Edit or upload a .md file.</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Submit */}
@@ -856,7 +944,17 @@ export const TopicDetailPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {flashcards.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfirmClearFormulasOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-semibold transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear All Formulas</span>
+              </button>
+            )}
             <input
               ref={mdInputRef}
               type="file"
@@ -984,8 +1082,8 @@ export const TopicDetailPage: React.FC = () => {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <div className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed">
-                  <MathText text={card.back_answer} />
+                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800 overflow-x-auto">
+                  <MarkdownRenderer text={card.back_answer} />
                 </div>
               </div>
             ))}
@@ -996,6 +1094,15 @@ export const TopicDetailPage: React.FC = () => {
           </p>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmClearFormulasOpen}
+        onClose={() => setConfirmClearFormulasOpen(false)}
+        onConfirm={() => clearAllFlashcards()}
+        title="Clear All Formulas"
+        message={`Delete all ${flashcards.length} formula cards from your Formula Vault?`}
+        confirmLabel="Clear All"
+      />
 
       <ConfirmModal
         isOpen={confirmDeleteOpen}

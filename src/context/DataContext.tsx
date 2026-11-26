@@ -122,6 +122,7 @@ interface DataContextType {
   toggleFlashcardReview: (id: string) => Promise<void>;
   gradeFlashcardSM2: (id: string, quality: 0 | 2 | 4 | 5) => Promise<void>;
   deleteFlashcard: (id: string) => Promise<void>;
+  clearAllFlashcards: () => Promise<void>;
 
   // Actions - Settings, Streak Freeze & Data Backup
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
@@ -1364,6 +1365,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const clearAllFlashcards = async () => {
+    const prevCards = [...data.flashcards];
+    setData((prev) => ({ ...prev, flashcards: [] }));
+    showToast({ type: 'info', title: 'All Formulas Cleared' });
+
+    if (user?.id && isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('flashcards').delete().eq('user_id', user.id);
+        if (error) throw error;
+      } catch (err: unknown) {
+        const error = err as Error;
+        setData((prev) => ({ ...prev, flashcards: prevCards }));
+        showToast({ type: 'error', title: 'Error clearing formulas', message: error.message });
+      }
+    }
+  };
+
   // =========================================================================
   // ACTIONS: SETTINGS & EXPORT
   // =========================================================================
@@ -1898,6 +1916,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleFlashcardReview,
         gradeFlashcardSM2,
         deleteFlashcard,
+        clearAllFlashcards,
         updateSettings,
         toggleStreakFreeze,
         exportData,

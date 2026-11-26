@@ -17,7 +17,7 @@ import {
 export const SyllabusPage: React.FC = () => {
   const { subjects, topics, addSubject, addTopic, updateTopic } = useData();
 
-  const [selectedPaperCode, setSelectedPaperCode] = useState<'CS' | 'DA' | 'ECE' | 'EE' | 'ME'>('CS');
+  const [selectedPaperCode, setSelectedPaperCode] = useState<'DA' | 'CS'>('DA');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSectionNumber, setSelectedSectionNumber] = useState<number | null>(null);
   const [importingPaper, setImportingPaper] = useState(false);

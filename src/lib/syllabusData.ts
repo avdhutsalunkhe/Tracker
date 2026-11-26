@@ -11,7 +11,7 @@ export interface SyllabusSection {
 }
 
 export interface GatePaperSyllabus {
-  code: 'CS' | 'DA' | 'ECE' | 'EE' | 'ME';
+  code: 'DA' | 'CS';
   name: string;
   organizingInstitute: string;
   sections: SyllabusSection[];
@@ -333,46 +333,6 @@ export const GATE_SYLLABUS_PAPERS: GatePaperSyllabus[] = [
           },
         ],
       },
-    ],
-  },
-  {
-    code: 'ECE',
-    name: 'Electronics and Communication Engineering',
-    organizingInstitute: 'GATE 2027 · Multi-Stream Preset',
-    sections: [
-      { sectionNumber: 1, title: 'Engineering Mathematics', color: '#6366F1', groups: [{ items: ['Linear Algebra & Matrices', 'Calculus & Vector Calculus', 'Differential Equations', 'Complex Analysis', 'Probability and Statistics'] }] },
-      { sectionNumber: 2, title: 'Networks, Signals and Systems', color: '#3B82F6', groups: [{ items: ['Network Theorems & Transient Analysis', 'Two-Port Networks', 'Continuous & Discrete Fourier Transforms', 'Laplace & Z-Transforms', 'LTI Systems'] }] },
-      { sectionNumber: 3, title: 'Electronic Devices', color: '#06B6D4', groups: [{ items: ['Energy Bands & Carrier Transport', 'P-N Junction & Zener Diodes', 'BJT & MOSFET Characteristics'] }] },
-      { sectionNumber: 4, title: 'Analog Circuits', color: '#10B981', groups: [{ items: ['Diode Circuits & Rectifiers', 'BJT/MOSFET Amplifiers', 'Op-Amp Applications & Oscillators'] }] },
-      { sectionNumber: 5, title: 'Digital Circuits', color: '#F59E0B', groups: [{ items: ['Combinational Logic', 'Sequential Circuits & FSMs', 'ADC/DAC & Semiconductor Memories'] }] },
-      { sectionNumber: 6, title: 'Control Systems', color: '#F97316', groups: [{ items: ['Block Diagrams & Time Response', 'Routh-Hurwitz & Root Locus', 'Bode, Nyquist & State Space'] }] },
-      { sectionNumber: 7, title: 'Communications', color: '#EC4899', groups: [{ items: ['Analog Modulation (AM, FM, PM)', 'Digital Modulation (ASK, FSK, PSK, QAM)', 'Information Theory & Noise'] }] },
-      { sectionNumber: 8, title: 'Electromagnetics', color: '#8B5CF6', groups: [{ items: ['Maxwell Equations', 'Plane Waves & Transmission Lines', 'Waveguides & Antennas'] }] },
-    ],
-  },
-  {
-    code: 'EE',
-    name: 'Electrical Engineering',
-    organizingInstitute: 'GATE 2027 · Multi-Stream Preset',
-    sections: [
-      { sectionNumber: 1, title: 'Engineering Mathematics', color: '#6366F1', groups: [{ items: ['Linear Algebra', 'Calculus', 'Differential Equations', 'Complex Variables', 'Probability & Numerical Methods'] }] },
-      { sectionNumber: 2, title: 'Electric Circuits', color: '#3B82F6', groups: [{ items: ['Network Theorems & Graph Theory', 'Transient Response of RL, RC, RLC', 'Sinusoidal Steady State & Three Phase'] }] },
-      { sectionNumber: 3, title: 'Electromagnetic Fields', color: '#06B6D4', groups: [{ items: ['Electrostatics & Magnetostatics', 'Faraday Law, Inductance & Maxwell Equations'] }] },
-      { sectionNumber: 4, title: 'Signals and Systems', color: '#10B981', groups: [{ items: ['LTI Systems', 'Fourier, Laplace & Z-Transforms', 'Sampling Theorem'] }] },
-      { sectionNumber: 5, title: 'Electrical Machines', color: '#F59E0B', groups: [{ items: ['Single & Three Phase Transformers', 'DC Machines', 'Three Phase Induction & Synchronous Machines'] }] },
-      { sectionNumber: 6, title: 'Power Systems', color: '#F97316', groups: [{ items: ['Transmission Line Models', 'Load Flow & Fault Analysis', 'Power System Stability & Protection'] }] },
-      { sectionNumber: 7, title: 'Control Systems & Power Electronics', color: '#8B5CF6', groups: [{ items: ['Root Locus, Bode & State Space', 'Phase-Controlled Rectifiers', 'DC-DC Converters & Inverters'] }] },
-    ],
-  },
-  {
-    code: 'ME',
-    name: 'Mechanical Engineering',
-    organizingInstitute: 'GATE 2027 · Multi-Stream Preset',
-    sections: [
-      { sectionNumber: 1, title: 'Engineering Mathematics', color: '#6366F1', groups: [{ items: ['Linear Algebra', 'Calculus', 'Differential Equations', 'Numerical Methods & Probability'] }] },
-      { sectionNumber: 2, title: 'Applied Mechanics & Design', color: '#3B82F6', groups: [{ items: ['Engineering Mechanics & Trusses', 'Mechanics of Materials & Mohr Circle', 'Theory of Machines & Vibrations', 'Machine Design (Fatigue, Shafts, Bearings)'] }] },
-      { sectionNumber: 3, title: 'Fluid Mechanics & Thermal Sciences', color: '#10B981', groups: [{ items: ['Fluid Statics, Kinematics & Bernoulli', 'Boundary Layer & Pipe Flow', 'Laws of Thermodynamics & Power Cycles', 'Heat Transfer (Conduction, Convection, Radiation)'] }] },
-      { sectionNumber: 4, title: 'Materials, Manufacturing & Industrial', color: '#F59E0B', groups: [{ items: ['Casting, Forming & Joining', 'Machining & Metrology', 'Linear Programming, Inventory & CPM/PERT'] }] },
     ],
   },
 ];

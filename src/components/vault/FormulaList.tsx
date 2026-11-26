@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { Flashcard } from '../../types';
 import { MathText } from '../common/MathText';
+import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Search, Plus, Trash2 } from 'lucide-react';
 
@@ -11,9 +12,10 @@ interface FormulaListProps {
 }
 
 export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onOpenAddModal }) => {
-  const { flashcards, subjects, toggleFlashcardReview, deleteFlashcard } = useData();
+  const { flashcards, subjects, toggleFlashcardReview, deleteFlashcard, clearAllFlashcards } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [cardToDelete, setCardToDelete] = useState<Flashcard | null>(null);
+  const [confirmClearAllOpen, setConfirmClearAllOpen] = useState(false);
 
   const subjectMap = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
@@ -50,13 +52,25 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
           />
         </div>
 
-        <button
-          onClick={onOpenAddModal}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0 self-end sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add Formula</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          {flashcards.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmClearAllOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-semibold transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear All</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenAddModal}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Formula</span>
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -103,8 +117,8 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
                     <MathText text={card.front_prompt} />
                   </h4>
-                  <div className="text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 whitespace-pre-line mt-2 overflow-x-auto">
-                    <MathText text={card.back_answer} />
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-slate-800/80 mt-2 overflow-x-auto">
+                    <MarkdownRenderer text={card.back_answer} />
                   </div>
                 </div>
 
@@ -132,6 +146,14 @@ export const FormulaList: React.FC<FormulaListProps> = ({ selectedSubjectId, onO
         title="Delete Formula Card"
         message={`Delete "${cardToDelete?.front_prompt}" from your Formula Vault?`}
         confirmLabel="Delete Card"
+      />
+      <ConfirmModal
+        isOpen={confirmClearAllOpen}
+        onClose={() => setConfirmClearAllOpen(false)}
+        onConfirm={() => clearAllFlashcards()}
+        title="Clear All Formulas"
+        message={`Delete all ${flashcards.length} formula cards from your Formula Vault?`}
+        confirmLabel="Clear All"
       />
     </div>
   );
