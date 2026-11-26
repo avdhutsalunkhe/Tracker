@@ -7,7 +7,17 @@ import { MistakeCategory, TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { MathText } from '../components/common/MathText';
 import { MarkdownRenderer } from '../components/common/MarkdownRenderer';
-import { parseSubtopics, serializeSubtopics, SubtopicItem } from '../utils/subtopics';
+import {
+  parseSubtopics,
+  serializeSubtopics,
+  SubtopicItem,
+  countSubtopics,
+  flattenSubtopicTitles,
+  toggleSubtopicInTree,
+  updateSubtopicDateInTree,
+  addChildSubtopicInTree,
+  removeSubtopicInTree,
+} from '../utils/subtopics';
 import {
   getStoredTopicStartDate,
   parseMarkdownFormulas,
@@ -58,6 +68,8 @@ export const TopicDetailPage: React.FC = () => {
   const [topicName, setTopicName] = useState('');
   const [subtopics, setSubtopics] = useState<SubtopicItem[]>([]);
   const [newSubtopicTitle, setNewSubtopicTitle] = useState('');
+  const [addingChildForId, setAddingChildForId] = useState<string | null>(null);
+  const [newChildTitle, setNewChildTitle] = useState('');
   const [status, setStatus] = useState<TopicStatus>('Not Started');
   const [confidence, setConfidence] = useState(3);
   const [pyqsSolved, setPyqsSolved] = useState(0);
@@ -222,30 +234,126 @@ export const TopicDetailPage: React.FC = () => {
     setNewSubtopicTitle('');
   };
 
+  const subtopicStats = useMemo(() => countSubtopics(subtopics), [subtopics]);
+  const flatSubtopicTitles = useMemo(() => flattenSubtopicTitles(subtopics), [subtopics]);
+
   const toggleSubtopicDone = (id: string) => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    setSubtopics((prev) =>
-      prev.map((s) => {
-        if (s.id !== id) return s;
-        const nextDone = !s.done;
-        return {
-          ...s,
-          done: nextDone,
-          covered_date: nextDone ? s.covered_date || todayStr : s.covered_date,
-        };
-      })
-    );
+    setSubtopics((prev) => toggleSubtopicInTree(prev, id, todayStr));
   };
 
   const updateSubtopicDate = (id: string, dateValue: string) => {
+    setSubtopics((prev) => updateSubtopicDateInTree(prev, id, dateValue));
+  };
+
+  const handleAddChildSubtopic = (parentId: string) => {
+    const clean = newChildTitle.trim();
+    if (!clean) return;
     setSubtopics((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, covered_date: dateValue || null } : s))
+      addChildSubtopicInTree(prev, parentId, {
+        id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        title: clean,
+        done: false,
+        covered_date: null,
+      })
     );
+    setNewChildTitle('');
+    setAddingChildForId(null);
   };
 
   const removeSubtopic = (id: string) => {
-    setSubtopics((prev) => prev.filter((s) => s.id !== id));
+    setSubtopics((prev) => removeSubtopicInTree(prev, id));
   };
+
+  const renderSubtopicNode = (sub: SubtopicItem, depth = 0): React.ReactNode => (
+    <div key={sub.id} className={depth > 0 ? 'ml-4 sm:ml-6 pl-3 border-l-2 border-indigo-200 dark:border-indigo-900 space-y-1.5' : 'space-y-1.5'}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs">
+        <button
+          type="button"
+          onClick={() => toggleSubtopicDone(sub.id)}
+          className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+        >
+          <span
+            className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
+              sub.done
+                ? 'bg-emerald-500 text-white'
+                : 'border border-slate-300 dark:border-slate-600'
+            }`}
+          >
+            {sub.done && <Check className="w-3 h-3 stroke-[3]" />}
+          </span>
+          <span className={`truncate font-medium ${sub.done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+            {sub.title}
+          </span>
+        </button>
+
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setAddingChildForId((prev) => (prev === sub.id ? null : sub.id));
+              setNewChildTitle('');
+            }}
+            className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 text-[10px] font-semibold hover:bg-indigo-100"
+            title="Add nested subtopic"
+          >
+            <Plus className="w-3 h-3" />
+            <span>Sub</span>
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-400">Covered:</span>
+            <input
+              type="date"
+              value={sub.covered_date || ''}
+              onChange={(e) => updateSubtopicDate(sub.id, e.target.value)}
+              aria-label={`Covered date for ${sub.title}`}
+              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => removeSubtopic(sub.id)}
+            className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
+            title="Remove subtopic"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {addingChildForId === sub.id && (
+        <div className="ml-4 sm:ml-6 flex items-center gap-2">
+          <input
+            type="text"
+            autoFocus
+            value={newChildTitle}
+            onChange={(e) => setNewChildTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddChildSubtopic(sub.id);
+              }
+            }}
+            placeholder={`Add sub-item under "${sub.title}"...`}
+            className="flex-1 px-3 py-1.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            type="button"
+            onClick={() => handleAddChildSubtopic(sub.id)}
+            className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0"
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {sub.children && sub.children.length > 0 && (
+        <div className="space-y-1.5">
+          {sub.children.map((child) => renderSubtopicNode(child, depth + 1))}
+        </div>
+      )}
+    </div>
+  );
 
   const handleAddMistake = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,7 +502,7 @@ export const TopicDetailPage: React.FC = () => {
         <div className="space-y-2.5 p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-700 dark:text-slate-200">
-              Subtopics Covered ({subtopics.filter((s) => s.done).length}/{subtopics.length})
+              Subtopics Covered ({subtopicStats.done}/{subtopicStats.total})
             </label>
             <span className="text-[11px] text-slate-400">Optional checklist</span>
           </div>
@@ -424,53 +532,8 @@ export const TopicDetailPage: React.FC = () => {
           </div>
 
           {subtopics.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              {subtopics.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSubtopicDone(sub.id)}
-                    className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
-                  >
-                    <span
-                      className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
-                        sub.done
-                          ? 'bg-emerald-500 text-white'
-                          : 'border border-slate-300 dark:border-slate-600'
-                      }`}
-                    >
-                      {sub.done && <Check className="w-3 h-3 stroke-[3]" />}
-                    </span>
-                    <span className={`truncate font-medium ${sub.done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                      {sub.title}
-                    </span>
-                  </button>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-slate-400">Covered:</span>
-                      <input
-                        type="date"
-                        value={sub.covered_date || ''}
-                        onChange={(e) => updateSubtopicDate(sub.id, e.target.value)}
-                        aria-label={`Covered date for ${sub.title}`}
-                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeSubtopic(sub.id)}
-                      className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
-                      title="Remove subtopic"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-2 pt-1">
+              {subtopics.map((sub) => renderSubtopicNode(sub, 0))}
             </div>
           )}
         </div>
@@ -750,16 +813,16 @@ export const TopicDetailPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {subtopics.length > 0 && (
+            {flatSubtopicTitles.length > 0 && (
               <select
                 value={mistakeSubtopic}
                 onChange={(e) => setMistakeSubtopic(e.target.value)}
                 className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">General Topic</option>
-                {subtopics.map((s) => (
-                  <option key={s.id} value={s.title}>
-                    {s.title}
+                {flatSubtopicTitles.map((title) => (
+                  <option key={title} value={title}>
+                    {title}
                   </option>
                 ))}
               </select>
@@ -769,7 +832,7 @@ export const TopicDetailPage: React.FC = () => {
               value={mistakeFixNote}
               onChange={(e) => setMistakeFixNote(e.target.value)}
               placeholder="Fix rule / correct approach (LaTeX $...$ supported)..."
-              className={`${subtopics.length > 0 ? 'sm:col-span-2' : 'sm:col-span-3'} px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500`}
+              className={`${flatSubtopicTitles.length > 0 ? 'sm:col-span-2' : 'sm:col-span-3'} px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500`}
             />
           </div>
 
@@ -1022,9 +1085,9 @@ export const TopicDetailPage: React.FC = () => {
               className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="__topic__">For Topic: {topic.topic_name}</option>
-              {subtopics.map((s) => (
-                <option key={s.id} value={s.title}>
-                  Subtopic: {s.title}
+              {flatSubtopicTitles.map((title) => (
+                <option key={title} value={title}>
+                  Subtopic: {title}
                 </option>
               ))}
             </select>
@@ -1058,7 +1121,7 @@ export const TopicDetailPage: React.FC = () => {
         </form>
 
         {/* Filter pills */}
-        {topicFormulas.length > 0 && subtopics.length > 0 && (
+        {topicFormulas.length > 0 && flatSubtopicTitles.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
@@ -1082,18 +1145,18 @@ export const TopicDetailPage: React.FC = () => {
             >
               Topic
             </button>
-            {subtopics.map((s) => (
+            {flatSubtopicTitles.map((title) => (
               <button
-                key={s.id}
+                key={title}
                 type="button"
-                onClick={() => setFormulaFilter(s.title)}
+                onClick={() => setFormulaFilter(title)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                  formulaFilter === s.title
+                  formulaFilter === title
                     ? 'bg-indigo-600 text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                 }`}
               >
-                {s.title}
+                {title}
               </button>
             ))}
           </div>

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { GateTopic, TopicStatus } from '../../types';
-import { parseSubtopics } from '../../utils/subtopics';
+import { parseSubtopics, countSubtopics } from '../../utils/subtopics';
 import { Search, Plus, ChevronRight, BookOpen } from 'lucide-react';
 
 interface TopicTableProps {
@@ -97,7 +97,7 @@ export const TopicTable: React.FC<TopicTableProps> = ({
           {filteredTopics.map((topic) => {
             const subject = subjectMap.get(topic.subject_id);
             const subList = parseSubtopics(topic.subtopic);
-            const subDone = subList.filter((s) => s.done).length;
+            const { done: subDone, total: subTotal } = countSubtopics(subList);
 
             return (
               <button
@@ -136,9 +136,9 @@ export const TopicTable: React.FC<TopicTableProps> = ({
                     {topic.topic_name}
                   </div>
 
-                  {subList.length > 0 && (
+                  {subTotal > 0 && (
                     <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                      {subDone}/{subList.length} subtopics covered
+                      {subDone}/{subTotal} subtopics covered
                     </div>
                   )}
                 </div>

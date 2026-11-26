@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useTimer } from '../context/TimerContext';
 import { TopicStatus } from '../types';
-import { parseSubtopics } from '../utils/subtopics';
+import { parseSubtopics, countSubtopics } from '../utils/subtopics';
 import { GATE_SYLLABUS_PAPERS } from '../lib/syllabusData';
 import { AddTopicModal } from '../components/gate/AddTopicModal';
 import {
@@ -284,7 +284,7 @@ export const SubjectDetailPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {filteredTopics.map((topic) => {
               const subList = parseSubtopics(topic.subtopic);
-              const subDone = subList.filter((s) => s.done).length;
+              const { done: subDone, total: subTotal } = countSubtopics(subList);
 
               return (
                 <div
@@ -317,9 +317,9 @@ export const SubjectDetailPage: React.FC = () => {
                       >
                         {topic.status}
                       </button>
-                      {subList.length > 0 && (
+                      {subTotal > 0 && (
                         <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                          {subDone}/{subList.length} subtopics
+                          {subDone}/{subTotal} subtopics
                         </span>
                       )}
                     </div>

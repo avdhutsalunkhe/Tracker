@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
-import { parseSubtopics } from '../../utils/subtopics';
+import { parseSubtopics, countSubtopics } from '../../utils/subtopics';
 import { BookOpen, Plus, ChevronRight, ArrowRight } from 'lucide-react';
 
 export const TodayGateTopicsWidget: React.FC = () => {
@@ -48,7 +48,7 @@ export const TodayGateTopicsWidget: React.FC = () => {
           {recentTopics.map((topic) => {
             const subj = subjectMap.get(topic.subject_id);
             const subList = parseSubtopics(topic.subtopic);
-            const subDone = subList.filter((s) => s.done).length;
+            const { done: subDone, total: subTotal } = countSubtopics(subList);
 
             return (
               <button
@@ -82,9 +82,9 @@ export const TodayGateTopicsWidget: React.FC = () => {
                   <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                     {topic.topic_name}
                   </div>
-                  {subList.length > 0 && (
+                  {subTotal > 0 && (
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                      {subDone}/{subList.length} subtopics covered
+                      {subDone}/{subTotal} subtopics covered
                     </div>
                   )}
                 </div>
