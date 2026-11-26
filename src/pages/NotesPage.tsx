@@ -702,22 +702,19 @@ export const NotesPage: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={async () => {
-                        try {
-                          const url = await getStudyDocumentUrl(selectedCloudDoc.storage_path);
-                          window.open(url, '_blank', 'noopener,noreferrer');
-                        } catch (err: unknown) {
-                          showToast({
-                            type: 'error',
-                            title: 'Open Failed',
-                            message: (err as Error).message,
-                          });
-                        }
-                      }}
+                      onClick={() =>
+                        navigate('/viewer', {
+                          state: {
+                            storagePath: selectedCloudDoc.storage_path,
+                            title: selectedCloudDoc.title,
+                            fileType: selectedCloudDoc.file_type,
+                          },
+                        })
+                      }
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0"
                     >
                       <ExternalLink className="w-4 h-4" />
-                      <span>Open / Download</span>
+                      <span>View {selectedCloudDoc.file_type.toUpperCase()}</span>
                     </button>
                   </div>
                 )

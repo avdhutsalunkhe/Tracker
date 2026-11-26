@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
@@ -41,6 +42,7 @@ const CATEGORIES: QuestionBankCategory[] = [
 ];
 
 export const MdQuestionBank: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { subjects, topics } = useData();
   const { showToast } = useToast();
@@ -183,16 +185,13 @@ export const MdQuestionBank: React.FC = () => {
     }
     const isMarkdown = ['md', 'markdown', 'txt'].includes(doc.file_type.toLowerCase());
     if (!isMarkdown) {
-      try {
-        const url = await getStudyDocumentUrl(doc.storage_path);
-        window.open(url, '_blank', 'noopener,noreferrer');
-      } catch (err: unknown) {
-        showToast({
-          type: 'error',
-          title: 'Cannot Open File',
-          message: (err as Error).message,
-        });
-      }
+      navigate('/viewer', {
+        state: {
+          storagePath: doc.storage_path,
+          title: doc.title,
+          fileType: doc.file_type,
+        },
+      });
       return;
     }
 
