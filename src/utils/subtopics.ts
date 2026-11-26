@@ -2,6 +2,7 @@ export interface SubtopicItem {
   id: string;
   title: string;
   done: boolean;
+  covered_date?: string | null;
 }
 
 export function parseSubtopics(raw?: string | null): SubtopicItem[] {
@@ -17,13 +18,14 @@ export function parseSubtopics(raw?: string | null): SubtopicItem[] {
             id: typeof x.id === 'string' ? x.id : `sub-${idx}`,
             title: x.title,
             done: Boolean(x.done),
+            covered_date: typeof x.covered_date === 'string' && x.covered_date ? x.covered_date : null,
           }));
       }
     } catch {
       // Fall through to plain text
     }
   }
-  return [{ id: 'sub-0', title: trimmed, done: false }];
+  return [{ id: 'sub-0', title: trimmed, done: false, covered_date: null }];
 }
 
 export function serializeSubtopics(items: SubtopicItem[]): string | null {

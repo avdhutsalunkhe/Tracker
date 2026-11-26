@@ -28,6 +28,7 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { loadStoredData, saveStoredData, getEmptyUserData, StorageData } from '../lib/storage';
+import { setStoredTopicStartDate } from '../utils/markdownFormulas';
 import { getSnapshot, saveSnapshot, clearUserQueue } from '../lib/localCache';
 import { SyncStatus, flushSyncQueue, mergeGuestSnapshotIfPresent } from '../lib/syncEngine';
 import { autoAllocateStudySlots, SAMPLE_ROUTINE_BLOCKS } from '../utils/scheduleAllocator';
@@ -909,6 +910,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Auto-schedule next revision date if status changed to Completed and no revision scheduled
     const updatedFields = { ...updates, updated_at: new Date().toISOString() };
+    if ('start_date' in updates) {
+      setStoredTopicStartDate(id, updates.start_date);
+    }
     if (updates.status === 'Completed' && target.status !== 'Completed' && !target.next_revision_date) {
       updatedFields.next_revision_date = format(addDays(new Date(), SPACED_REPETITION_INTERVALS[0]), 'yyyy-MM-dd');
       if (!updates.covered_date) {
@@ -924,7 +928,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user?.id && isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('gate_topics').update(updatedFields).eq('id', id);
+        const { start_date: _omitStartDate, ...supabaseUpdates } = updatedFields;
+        const { error } = await supabase.from('gate_topics').update(supabaseUpdates).eq('id', id);
         if (error) throw error;
       } catch (err: unknown) {
         const error = err as Error;

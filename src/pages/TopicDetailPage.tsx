@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { format, differenceInDays, parseISO } from 'date-fns';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
-import { TopicStatus } from '../types';
+import { MistakeCategory, TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
+import { MathText } from '../components/common/MathText';
 import { parseSubtopics, serializeSubtopics, SubtopicItem } from '../utils/subtopics';
+import {
+  getStoredTopicStartDate,
+  parseMarkdownFormulas,
+} from '../utils/markdownFormulas';
 import {
   ArrowLeft,
   Save,
@@ -16,12 +22,30 @@ import {
   BookOpen,
   Plus,
   Check,
+  AlertTriangle,
+  FileText,
+  Upload,
+  Sparkles,
 } from 'lucide-react';
 
 export const TopicDetailPage: React.FC = () => {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
-  const { topics, subjects, revisions, updateTopic, deleteTopic, markTopicRevised } = useData();
+  const {
+    topics,
+    subjects,
+    revisions,
+    mistakes,
+    flashcards,
+    updateTopic,
+    deleteTopic,
+    markTopicRevised,
+    addMistake,
+    toggleMistakeResolved,
+    deleteMistake,
+    addFlashcard,
+    deleteFlashcard,
+  } = useData();
   const { showToast } = useToast();
 
   const topic = useMemo(() => topics.find((t) => t.id === topicId), [topics, topicId]);
@@ -34,11 +58,25 @@ export const TopicDetailPage: React.FC = () => {
   const [confidence, setConfidence] = useState(3);
   const [pyqsSolved, setPyqsSolved] = useState(0);
   const [studyHours, setStudyHours] = useState(0);
+  const [startDate, setStartDate] = useState('');
   const [coveredDate, setCoveredDate] = useState('');
   const [nextRevisionDate, setNextRevisionDate] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  // Mistake section state
+  const [mistakeTitle, setMistakeTitle] = useState('');
+  const [mistakeCategory, setMistakeCategory] = useState<MistakeCategory>('Conceptual Gap');
+  const [mistakeSubtopic, setMistakeSubtopic] = useState('');
+  const [mistakeFixNote, setMistakeFixNote] = useState('');
+
+  // Formula Vault & .md upload state
+  const [formulaTarget, setFormulaTarget] = useState('__topic__');
+  const [formulaTitle, setFormulaTitle] = useState('');
+  const [formulaBody, setFormulaBody] = useState('');
+  const [formulaFilter, setFormulaFilter] = useState('all');
+  const mdInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!topic) return;
@@ -49,6 +87,7 @@ export const TopicDetailPage: React.FC = () => {
     setConfidence(topic.confidence);
     setPyqsSolved(topic.pyqs_solved || 0);
     setStudyHours(topic.study_hours || 0);
+    setStartDate(topic.start_date || getStoredTopicStartDate(topic.id));
     setCoveredDate(topic.covered_date || '');
     setNextRevisionDate(topic.next_revision_date || '');
     setNotes(topic.notes || '');
@@ -60,6 +99,48 @@ export const TopicDetailPage: React.FC = () => {
       .filter((r) => r.topic_id === topic.id)
       .sort((a, b) => b.revision_number - a.revision_number);
   }, [revisions, topic]);
+
+  const topicMistakes = useMemo(() => {
+    if (!topic) return [];
+    const nameLower = topic.topic_name.toLowerCase();
+    return mistakes.filter(
+      (m) =>
+        m.subject_id === topic.subject_id &&
+        (m.title.toLowerCase().includes(nameLower) ||
+          (m.fix_note || '').toLowerCase().includes(nameLower))
+    );
+  }, [mistakes, topic]);
+
+  const topicFormulas = useMemo(() => {
+    if (!topic) return [];
+    const prefix = `[${topic.topic_name}`;
+    return flashcards.filter(
+      (c) =>
+        c.subject_id === topic.subject_id &&
+        c.front_prompt.startsWith(prefix)
+    );
+  }, [flashcards, topic]);
+
+  const filteredFormulas = useMemo(() => {
+    if (!topic) return [];
+    if (formulaFilter === 'all') return topicFormulas;
+    if (formulaFilter === '__topic__') {
+      return topicFormulas.filter((c) => c.front_prompt.startsWith(`[${topic.topic_name}]`));
+    }
+    return topicFormulas.filter((c) =>
+      c.front_prompt.startsWith(`[${topic.topic_name} · ${formulaFilter}]`)
+    );
+  }, [topicFormulas, formulaFilter, topic]);
+
+  const durationDays = useMemo(() => {
+    if (!startDate || !coveredDate) return null;
+    try {
+      const diff = differenceInDays(parseISO(coveredDate), parseISO(startDate));
+      return diff >= 0 ? diff + 1 : null;
+    } catch {
+      return null;
+    }
+  }, [startDate, coveredDate]);
 
   if (!topic) {
     return (
@@ -91,6 +172,7 @@ export const TopicDetailPage: React.FC = () => {
         confidence,
         pyqs_solved: Math.max(0, Number(pyqsSolved) || 0),
         study_hours: Math.max(0, Number(studyHours) || 0),
+        start_date: startDate || null,
         covered_date: coveredDate || null,
         next_revision_date: nextRevisionDate || null,
         notes: notes.trim() || null,
@@ -106,22 +188,126 @@ export const TopicDetailPage: React.FC = () => {
     }
   };
 
+  const handleStatusChange = (nextStatus: TopicStatus) => {
+    setStatus(nextStatus);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (nextStatus === 'In Progress' && !startDate) {
+      setStartDate(todayStr);
+    } else if (nextStatus === 'Completed') {
+      if (!startDate) setStartDate(todayStr);
+      if (!coveredDate) setCoveredDate(todayStr);
+    }
+  };
+
   const handleAddSubtopic = () => {
     const clean = newSubtopicTitle.trim();
     if (!clean) return;
     setSubtopics((prev) => [
       ...prev,
-      { id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`, title: clean, done: false },
+      {
+        id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        title: clean,
+        done: false,
+        covered_date: null,
+      },
     ]);
     setNewSubtopicTitle('');
   };
 
   const toggleSubtopicDone = (id: string) => {
-    setSubtopics((prev) => prev.map((s) => (s.id === id ? { ...s, done: !s.done } : s)));
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    setSubtopics((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        const nextDone = !s.done;
+        return {
+          ...s,
+          done: nextDone,
+          covered_date: nextDone ? s.covered_date || todayStr : s.covered_date,
+        };
+      })
+    );
+  };
+
+  const updateSubtopicDate = (id: string, dateValue: string) => {
+    setSubtopics((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, covered_date: dateValue || null } : s))
+    );
   };
 
   const removeSubtopic = (id: string) => {
     setSubtopics((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleAddMistake = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mistakeTitle.trim()) return;
+    const tag = mistakeSubtopic
+      ? `[Topic: ${topic.topic_name} · ${mistakeSubtopic}]`
+      : `[Topic: ${topic.topic_name}]`;
+    const combinedNote = mistakeFixNote.trim() ? `${tag} ${mistakeFixNote.trim()}` : tag;
+
+    await addMistake({
+      subject_id: topic.subject_id,
+      mock_test_id: null,
+      title: mistakeTitle.trim(),
+      category: mistakeCategory,
+      fix_note: combinedNote,
+      image_url: null,
+    });
+    setMistakeTitle('');
+    setMistakeFixNote('');
+    setMistakeSubtopic('');
+  };
+
+  const getFormulaPrefix = () => {
+    if (formulaTarget === '__topic__') return `[${topic.topic_name}]`;
+    return `[${topic.topic_name} · ${formulaTarget}]`;
+  };
+
+  const handleAddFormula = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formulaTitle.trim() || !formulaBody.trim()) return;
+    const prompt = `${getFormulaPrefix()} ${formulaTitle.trim()}`;
+    await addFlashcard(topic.subject_id, prompt, formulaBody.trim());
+    setFormulaTitle('');
+    setFormulaBody('');
+  };
+
+  const handleMdFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseMarkdownFormulas(text, file.name);
+      if (parsed.length === 0) {
+        showToast({
+          type: 'error',
+          title: 'Empty Markdown File',
+          message: 'No formulas or notes found in the selected .md file.',
+        });
+        return;
+      }
+      const prefix = getFormulaPrefix();
+      for (const item of parsed) {
+        await addFlashcard(topic.subject_id, `${prefix} ${item.title}`, item.body);
+      }
+      showToast({
+        type: 'success',
+        title: 'Markdown Imported',
+        message: `Added ${parsed.length} formula card${parsed.length === 1 ? '' : 's'} to ${
+          formulaTarget === '__topic__' ? topic.topic_name : formulaTarget
+        }.`,
+      });
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: 'Could not read the selected .md file.',
+      });
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const statuses: TopicStatus[] = ['Not Started', 'In Progress', 'Completed'];
@@ -234,7 +420,7 @@ export const TopicDetailPage: React.FC = () => {
               {subtopics.map((sub) => (
                 <div
                   key={sub.id}
-                  className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs"
                 >
                   <button
                     type="button"
@@ -254,14 +440,27 @@ export const TopicDetailPage: React.FC = () => {
                       {sub.title}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => removeSubtopic(sub.id)}
-                    className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
-                    title="Remove subtopic"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-400">Covered:</span>
+                      <input
+                        type="date"
+                        value={sub.covered_date || ''}
+                        onChange={(e) => updateSubtopicDate(sub.id, e.target.value)}
+                        aria-label={`Covered date for ${sub.title}`}
+                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSubtopic(sub.id)}
+                      className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
+                      title="Remove subtopic"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -280,7 +479,7 @@ export const TopicDetailPage: React.FC = () => {
                 <button
                   type="button"
                   key={s}
-                  onClick={() => setStatus(s)}
+                  onClick={() => handleStatusChange(s)}
                   className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
                     isSelected
                       ? s === 'Completed'
@@ -387,29 +586,53 @@ export const TopicDetailPage: React.FC = () => {
         </div>
 
         {/* Dates */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Covered Date
-            </label>
-            <input
-              type="date"
-              value={coveredDate}
-              onChange={(e) => setCoveredDate(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Study Timeline & Revision
+            </span>
+            {durationDays !== null && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 tabular-nums">
+                {durationDays} {durationDays === 1 ? 'day' : 'days'} span
+              </span>
+            )}
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Next Revision Date
-            </label>
-            <input
-              type="date"
-              value={nextRevisionDate}
-              onChange={(e) => setNextRevisionDate(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                End / Covered Date
+              </label>
+              <input
+                type="date"
+                value={coveredDate}
+                onChange={(e) => setCoveredDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                Next Revision Date
+              </label>
+              <input
+                type="date"
+                value={nextRevisionDate}
+                onChange={(e) => setNextRevisionDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs tabular-nums outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -494,6 +717,283 @@ export const TopicDetailPage: React.FC = () => {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Mistakes Section */}
+      <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500" />
+              Mistakes & Trap Points ({topicMistakes.length})
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Log mistakes made while solving questions on this topic or its subtopics. Synced with Mistake Notebook.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleAddMistake} className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <input
+              type="text"
+              value={mistakeTitle}
+              onChange={(e) => setMistakeTitle(e.target.value)}
+              placeholder="Mistake / question summary..."
+              className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <select
+              value={mistakeCategory}
+              onChange={(e) => setMistakeCategory(e.target.value as MistakeCategory)}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="Conceptual Gap">Conceptual Gap</option>
+              <option value="Silly / Calculation">Silly / Calculation</option>
+              <option value="Formula Forgotten">Formula Forgotten</option>
+              <option value="Time Pressure">Time Pressure</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {subtopics.length > 0 && (
+              <select
+                value={mistakeSubtopic}
+                onChange={(e) => setMistakeSubtopic(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">General Topic</option>
+                {subtopics.map((s) => (
+                  <option key={s.id} value={s.title}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            <input
+              type="text"
+              value={mistakeFixNote}
+              onChange={(e) => setMistakeFixNote(e.target.value)}
+              placeholder="Fix rule / correct approach (LaTeX $...$ supported)..."
+              className={`${subtopics.length > 0 ? 'sm:col-span-2' : 'sm:col-span-3'} px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500`}
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!mistakeTitle.trim()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Mistake</span>
+            </button>
+          </div>
+        </form>
+
+        {topicMistakes.length > 0 ? (
+          <div className="space-y-2">
+            {topicMistakes.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-start justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 text-xs"
+              >
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleMistakeResolved(m.id)}
+                    className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 ${
+                      m.is_resolved
+                        ? 'bg-emerald-500 text-white'
+                        : 'border border-slate-300 dark:border-slate-600'
+                    }`}
+                    title={m.is_resolved ? 'Mark unresolved' : 'Mark resolved'}
+                  >
+                    {m.is_resolved && <Check className="w-3 h-3 stroke-[3]" />}
+                  </button>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`font-semibold ${m.is_resolved ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                        {m.title}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300">
+                        {m.category}
+                      </span>
+                    </div>
+                    {m.fix_note && (
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <MathText text={m.fix_note} />
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => deleteMistake(m.id)}
+                  className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
+                  title="Delete mistake"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">No mistakes logged for this topic yet.</p>
+        )}
+      </div>
+
+      {/* Formula Vault & .md Upload Section */}
+      <div className="rounded-2xl bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder p-4 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              Formula Vault & Markdown (.md) Notes ({topicFormulas.length})
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Add formulas or upload a <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code> file for this topic or any subtopic.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              ref={mdInputRef}
+              type="file"
+              accept=".md,.markdown,.txt"
+              onChange={handleMdFileUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => mdInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Upload .md File</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Add Formula / Target Selector */}
+        <form onSubmit={handleAddFormula} className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <select
+              value={formulaTarget}
+              onChange={(e) => setFormulaTarget(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="__topic__">For Topic: {topic.topic_name}</option>
+              {subtopics.map((s) => (
+                <option key={s.id} value={s.title}>
+                  Subtopic: {s.title}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={formulaTitle}
+              onChange={(e) => setFormulaTitle(e.target.value)}
+              placeholder="Formula title / prompt..."
+              className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <textarea
+            rows={2}
+            value={formulaBody}
+            onChange={(e) => setFormulaBody(e.target.value)}
+            placeholder="Formula or derivation (supports LaTeX $E = mc^2$ or $$...$$)..."
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!formulaTitle.trim() || !formulaBody.trim()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Save Formula</span>
+            </button>
+          </div>
+        </form>
+
+        {/* Filter pills */}
+        {topicFormulas.length > 0 && subtopics.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFormulaFilter('all')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                formulaFilter === 'all'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              All ({topicFormulas.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormulaFilter('__topic__')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                formulaFilter === '__topic__'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              Topic
+            </button>
+            {subtopics.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setFormulaFilter(s.title)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                  formulaFilter === s.title
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredFormulas.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filteredFormulas.map((card) => (
+              <div
+                key={card.id}
+                className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-1.5 flex flex-col justify-between"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-1.5 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">
+                      <MathText text={card.front_prompt} />
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteFlashcard(card.id)}
+                    className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
+                    title="Delete formula"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed">
+                  <MathText text={card.back_answer} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">
+            No formulas saved for this topic yet. Add one above or upload a <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">.md</code> file.
+          </p>
         )}
       </div>
 

@@ -71,6 +71,7 @@ export interface GateTopic {
   topic_name: string;
   subtopic?: string | null;
   status: TopicStatus;
+  start_date?: string | null; // YYYY-MM-DD
   covered_date?: string | null; // YYYY-MM-DD
   confidence: number; // 1 to 5
   pyqs_solved: number;
