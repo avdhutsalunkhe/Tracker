@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, useCallb
 import { TimerMode, PomodoroPhase, FocusQuality } from '../types';
 import { useData } from './DataContext';
 import { sound } from '../lib/sound';
+import { updateActiveTimerNotification, clearActiveTimerNotification } from '../lib/pushNotifications';
 
 interface TimerContextType {
   mode: TimerMode;
@@ -142,6 +143,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const resetTimer = () => {
     setIsRunning(false);
+    clearActiveTimerNotification();
     if (mode === 'Pomodoro') {
       const sec = getInitialSecondsForPhase(phase);
       setTimeLeftSeconds(sec);
@@ -153,6 +155,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const finishSession = (focusQuality: FocusQuality = 'Deep') => {
     setIsRunning(false);
+    clearActiveTimerNotification();
     if (mode === 'Pomodoro') {
       if (phase === 'focus') {
         const secondsSpent = totalDurationSeconds - timeLeftSeconds;
@@ -197,6 +200,52 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? Math.min(100, Math.max(0, Math.round(((totalDurationSeconds - timeLeftSeconds) / totalDurationSeconds) * 100)))
         : 0
       : Math.min(100, Math.round((elapsedSeconds % 3600) / 36));
+
+  // Sync active timer notification in Android/Desktop notification shade
+  useEffect(() => {
+    if (!isRunning) return;
+    updateActiveTimerNotification({
+      title: `Tracker · ${mode === 'Pomodoro' ? (phase === 'focus' ? 'Focus Running' : 'Break') : 'Deep Stopwatch'}`,
+      body: `${formattedTime} ${mode === 'Pomodoro' ? 'remaining' : 'elapsed'}`,
+      isRunning: true,
+      silent: true,
+    });
+  }, [isRunning, mode, phase, Math.floor(currentSeconds / 15)]);
+
+  // Listen to notification shade action buttons (Pause / Stop & Save)
+  useEffect(() => {
+    const handleAction = (action: string) => {
+      if (action === 'pause-timer') {
+        setIsRunning((prev) => !prev);
+      } else if (action === 'stop-timer') {
+        finishSession('Deep');
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      bc = new BroadcastChannel('tracker-timer-actions');
+      bc.onmessage = (e) => {
+        if (e.data?.action) handleAction(e.data.action);
+      };
+    }
+
+    const swListener = (e: MessageEvent) => {
+      if (e.data?.type === 'TRACKER_TIMER_ACTION' && e.data?.action) {
+        handleAction(e.data.action);
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', swListener);
+    }
+
+    return () => {
+      bc?.close();
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', swListener);
+      }
+    };
+  }, []);
 
   return (
     <TimerContext.Provider

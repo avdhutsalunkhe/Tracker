@@ -5,6 +5,7 @@ import { DateSwitcher } from '../components/today/DateSwitcher';
 import { HabitList } from '../components/today/HabitList';
 import { TaskList } from '../components/today/TaskList';
 import { TodayScheduleWidget } from '../components/today/TodayScheduleWidget';
+import { TodayGateTopicsWidget } from '../components/today/TodayGateTopicsWidget';
 import { WeeklyReviewCard } from '../components/analytics/WeeklyReviewCard';
 
 export const TodayPage: React.FC = () => {
@@ -23,6 +24,9 @@ export const TodayPage: React.FC = () => {
 
       {/* 3. Today's Planned Study Schedule */}
       <TodayScheduleWidget />
+
+      {/* 4. GATE Topics & Subtopics Quick Access */}
+      <TodayGateTopicsWidget />
 
       {/* 4. Date Switcher */}
       <DateSwitcher />

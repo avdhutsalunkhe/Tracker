@@ -51,6 +51,45 @@ export async function showLocalSwNotification(title: string, body: string, url =
   }
 }
 
+export async function updateActiveTimerNotification(params: {
+  title: string;
+  body: string;
+  isRunning: boolean;
+  silent?: boolean;
+}): Promise<void> {
+  if (!isPushSupported() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(params.title, {
+      body: params.body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'tracker-active-timer',
+      renotify: false,
+      silent: params.silent ?? true,
+      requireInteraction: params.isRunning,
+      data: { url: '/timer' },
+      actions: [
+        { action: 'pause-timer', title: params.isRunning ? 'Pause' : 'Resume' },
+        { action: 'stop-timer', title: 'Stop & Save' },
+      ],
+    } as NotificationOptions);
+  } catch {
+    // Ignore if SW unavailable
+  }
+}
+
+export async function clearActiveTimerNotification(): Promise<void> {
+  if (!isPushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const notifications = await reg.getNotifications({ tag: 'tracker-active-timer' });
+    notifications.forEach((n) => n.close());
+  } catch {
+    // Ignore
+  }
+}
+
 export async function subscribeToWebPush(
   userId: string,
   preAlertMins = 5,

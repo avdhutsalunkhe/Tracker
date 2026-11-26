@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import { TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
+import { parseSubtopics, serializeSubtopics, SubtopicItem } from '../utils/subtopics';
 import {
   ArrowLeft,
   Save,
@@ -11,9 +12,10 @@ import {
   Star,
   RotateCcw,
   Calendar,
-  Clock,
   CheckCircle2,
   BookOpen,
+  Plus,
+  Check,
 } from 'lucide-react';
 
 export const TopicDetailPage: React.FC = () => {
@@ -26,7 +28,8 @@ export const TopicDetailPage: React.FC = () => {
 
   const [subjectId, setSubjectId] = useState('');
   const [topicName, setTopicName] = useState('');
-  const [subtopic, setSubtopic] = useState('');
+  const [subtopics, setSubtopics] = useState<SubtopicItem[]>([]);
+  const [newSubtopicTitle, setNewSubtopicTitle] = useState('');
   const [status, setStatus] = useState<TopicStatus>('Not Started');
   const [confidence, setConfidence] = useState(3);
   const [pyqsSolved, setPyqsSolved] = useState(0);
@@ -41,7 +44,7 @@ export const TopicDetailPage: React.FC = () => {
     if (!topic) return;
     setSubjectId(topic.subject_id);
     setTopicName(topic.topic_name);
-    setSubtopic(topic.subtopic || '');
+    setSubtopics(parseSubtopics(topic.subtopic));
     setStatus(topic.status);
     setConfidence(topic.confidence);
     setPyqsSolved(topic.pyqs_solved || 0);
@@ -83,7 +86,7 @@ export const TopicDetailPage: React.FC = () => {
       await updateTopic(topic.id, {
         subject_id: subjectId,
         topic_name: topicName.trim(),
-        subtopic: subtopic.trim() || null,
+        subtopic: serializeSubtopics(subtopics),
         status,
         confidence,
         pyqs_solved: Math.max(0, Number(pyqsSolved) || 0),
@@ -101,6 +104,24 @@ export const TopicDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddSubtopic = () => {
+    const clean = newSubtopicTitle.trim();
+    if (!clean) return;
+    setSubtopics((prev) => [
+      ...prev,
+      { id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`, title: clean, done: false },
+    ]);
+    setNewSubtopicTitle('');
+  };
+
+  const toggleSubtopicDone = (id: string) => {
+    setSubtopics((prev) => prev.map((s) => (s.id === id ? { ...s, done: !s.done } : s)));
+  };
+
+  const removeSubtopic = (id: string) => {
+    setSubtopics((prev) => prev.filter((s) => s.id !== id));
   };
 
   const statuses: TopicStatus[] = ['Not Started', 'In Progress', 'Completed'];
@@ -161,7 +182,7 @@ export const TopicDetailPage: React.FC = () => {
             </select>
           </div>
 
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               Topic / Chapter Name
             </label>
@@ -173,19 +194,78 @@ export const TopicDetailPage: React.FC = () => {
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Subtopic <span className="font-normal text-slate-400">(Optional)</span>
+        {/* Subtopics Covered Checklist */}
+        <div className="space-y-2.5 p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+              Subtopics Covered ({subtopics.filter((s) => s.done).length}/{subtopics.length})
             </label>
+            <span className="text-[11px] text-slate-400">Optional checklist</span>
+          </div>
+
+          <div className="flex items-center gap-2">
             <input
               type="text"
-              value={subtopic}
-              onChange={(e) => setSubtopic(e.target.value)}
-              placeholder="e.g. Pointer Arithmetic, 2D Arrays"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+              value={newSubtopicTitle}
+              onChange={(e) => setNewSubtopicTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddSubtopic();
+                }
+              }}
+              placeholder="Add subtopic (e.g. Pointer Arithmetic, 2D Arrays)..."
+              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            <button
+              type="button"
+              onClick={handleAddSubtopic}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add</span>
+            </button>
           </div>
+
+          {subtopics.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              {subtopics.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSubtopicDone(sub.id)}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                  >
+                    <span
+                      className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
+                        sub.done
+                          ? 'bg-emerald-500 text-white'
+                          : 'border border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {sub.done && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                    <span className={`truncate font-medium ${sub.done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                      {sub.title}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSubtopic(sub.id)}
+                    className="p-1 text-slate-400 hover:text-rose-500 shrink-0"
+                    title="Remove subtopic"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Status */}

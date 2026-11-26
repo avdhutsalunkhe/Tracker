@@ -38,6 +38,26 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
   const action = event.action;
+
+  if (action === 'pause-timer' || action === 'stop-timer') {
+    if (action === 'stop-timer') {
+      notification.close();
+    }
+    try {
+      const bc = new BroadcastChannel('tracker-timer-actions');
+      bc.postMessage({ action });
+      bc.close();
+    } catch {
+      // Ignore if BroadcastChannel unsupported
+    }
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        clients.forEach((c) => c.postMessage({ type: 'TRACKER_TIMER_ACTION', action }));
+      })
+    );
+    return;
+  }
+
   notification.close();
 
   if (action === 'snooze') {
