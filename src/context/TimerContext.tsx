@@ -48,39 +48,85 @@ interface TimerContextType {
 
 const TimerContext = createContext<TimerContextType | undefined>(undefined);
 
+const TIMER_STORAGE_KEY = 'avdhut_active_timer_v1';
+
+interface PersistedTimerState {
+  mode: TimerMode;
+  phase: PomodoroPhase;
+  isRunning: boolean;
+  focusMinutes: number;
+  breakMinutes: number;
+  longBreakMinutes: number;
+  timeLeftSeconds: number;
+  totalDurationSeconds: number;
+  elapsedSeconds: number;
+  endAtMs: number | null;
+  startedAtMs: number | null;
+  selectedSubjectId: string | null;
+  selectedTopicId: string | null;
+  isScreenLocked: boolean;
+}
+
+function loadPersistedTimer(): PersistedTimerState | null {
+  try {
+    const raw = localStorage.getItem(TIMER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedTimerState;
+    if (!parsed || typeof parsed.mode !== 'string') return null;
+
+    if (parsed.isRunning) {
+      if (parsed.mode === 'Pomodoro' && parsed.endAtMs) {
+        parsed.timeLeftSeconds = Math.max(0, Math.ceil((parsed.endAtMs - Date.now()) / 1000));
+      } else if (parsed.mode === 'Stopwatch' && parsed.startedAtMs) {
+        parsed.elapsedSeconds = Math.max(0, Math.floor((Date.now() - parsed.startedAtMs) / 1000));
+      }
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { settings, logStudySession } = useData();
+  const initialPersistedRef = useRef<PersistedTimerState | null>(loadPersistedTimer());
+  const p = initialPersistedRef.current;
 
-  const [mode, setMode] = useState<TimerMode>('Pomodoro');
-  const [phase, setPhase] = useState<PomodoroPhase>('focus');
-  const [isRunning, setIsRunning] = useState(false);
+  const [mode, setMode] = useState<TimerMode>(p?.mode || 'Pomodoro');
+  const [phase, setPhase] = useState<PomodoroPhase>(p?.phase || 'focus');
+  const [isRunning, setIsRunning] = useState<boolean>(Boolean(p?.isRunning));
 
   // Minutes presets
-  const [focusMinutes, setFocusMinutes] = useState(settings?.pomodoro_focus_mins || 50);
-  const [breakMinutes, setBreakMinutes] = useState(settings?.pomodoro_break_mins || 10);
-  const [longBreakMinutes, setLongBreakMinutes] = useState(15);
+  const [focusMinutes, setFocusMinutes] = useState<number>(p?.focusMinutes || settings?.pomodoro_focus_mins || 50);
+  const [breakMinutes, setBreakMinutes] = useState<number>(p?.breakMinutes || settings?.pomodoro_break_mins || 10);
+  const [longBreakMinutes, setLongBreakMinutes] = useState<number>(p?.longBreakMinutes || 15);
 
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(p?.selectedSubjectId ?? null);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(p?.selectedTopicId ?? null);
 
-  // Synchronize when settings change
+  // Synchronize when settings change (only if no active/paused session is in progress)
   useEffect(() => {
+    if (isRunning || initialPersistedRef.current) return;
     if (settings?.pomodoro_focus_mins) setFocusMinutes(settings.pomodoro_focus_mins);
     if (settings?.pomodoro_break_mins) setBreakMinutes(settings.pomodoro_break_mins);
-  }, [settings?.pomodoro_focus_mins, settings?.pomodoro_break_mins]);
+  }, [settings?.pomodoro_focus_mins, settings?.pomodoro_break_mins, isRunning]);
 
   // Pomodoro countdown seconds
-  const getInitialSecondsForPhase = useCallback((p: PomodoroPhase) => {
-    if (p === 'focus') return focusMinutes * 60;
-    if (p === 'short_break') return breakMinutes * 60;
+  const getInitialSecondsForPhase = useCallback((ph: PomodoroPhase) => {
+    if (ph === 'focus') return focusMinutes * 60;
+    if (ph === 'short_break') return breakMinutes * 60;
     return longBreakMinutes * 60;
   }, [focusMinutes, breakMinutes, longBreakMinutes]);
 
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(() => focusMinutes * 60);
-  const [totalDurationSeconds, setTotalDurationSeconds] = useState<number>(() => focusMinutes * 60);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(() =>
+    p ? p.timeLeftSeconds : focusMinutes * 60
+  );
+  const [totalDurationSeconds, setTotalDurationSeconds] = useState<number>(() =>
+    p ? p.totalDurationSeconds : focusMinutes * 60
+  );
 
   // Stopwatch countup seconds
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => p?.elapsedSeconds || 0);
 
   // Focus Lock + PIN state
   const [focusLockEnabled, setFocusLockEnabled] = useState<boolean>(() => {
@@ -97,7 +143,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return '1234';
     }
   });
-  const [isScreenLocked, setIsScreenLocked] = useState(false);
+  const [isScreenLocked, setIsScreenLocked] = useState<boolean>(Boolean(p?.isScreenLocked));
 
   const setFocusPin = (pin: string) => {
     const clean = pin.trim() || '1234';
@@ -128,29 +174,82 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return false;
   };
 
-  // Timestamp refs so background browser throttling never loses time
-  const endAtMsRef = useRef<number | null>(null);
-  const startedAtMsRef = useRef<number | null>(null);
+  // Timestamp refs so background browser throttling & page refreshes never lose time
+  const endAtMsRef = useRef<number | null>(p?.endAtMs ?? null);
+  const startedAtMsRef = useRef<number | null>(p?.startedAtMs ?? null);
 
-  // Screen Wake Lock while timer is running
+  // Persist active timer state to localStorage on every change
+  useEffect(() => {
+    try {
+      const payload: PersistedTimerState = {
+        mode,
+        phase,
+        isRunning,
+        focusMinutes,
+        breakMinutes,
+        longBreakMinutes,
+        timeLeftSeconds,
+        totalDurationSeconds,
+        elapsedSeconds,
+        endAtMs: endAtMsRef.current,
+        startedAtMs: startedAtMsRef.current,
+        selectedSubjectId,
+        selectedTopicId,
+        isScreenLocked,
+      };
+      localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [
+    mode,
+    phase,
+    isRunning,
+    focusMinutes,
+    breakMinutes,
+    longBreakMinutes,
+    timeLeftSeconds,
+    totalDurationSeconds,
+    elapsedSeconds,
+    selectedSubjectId,
+    selectedTopicId,
+    isScreenLocked,
+  ]);
+
+  // Screen Wake Lock while timer is running (re-acquired on screen wake)
   useEffect(() => {
     let wakeLock: { release: () => Promise<void> } | null = null;
     const nav = navigator as Navigator & {
       wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
     };
-    if (isRunning && nav.wakeLock) {
-      nav.wakeLock.request('screen').then((wl) => {
-        wakeLock = wl;
-      }).catch(() => {});
-    }
+    const requestLock = () => {
+      if (isRunning && !document.hidden && nav.wakeLock) {
+        nav.wakeLock.request('screen').then((wl) => {
+          wakeLock = wl;
+        }).catch(() => {});
+      }
+    };
+    requestLock();
+    document.addEventListener('visibilitychange', requestLock);
     return () => {
+      document.removeEventListener('visibilitychange', requestLock);
       wakeLock?.release().catch(() => {});
     };
   }, [isRunning]);
 
-  // When focus/break durations change while stopped in that phase, reset countdown
+  // When focus/break durations change while stopped at initial state, update countdown
+  const prevDurationsRef = useRef({ focusMinutes, breakMinutes, longBreakMinutes, phase, mode });
   useEffect(() => {
-    if (!isRunning && mode === 'Pomodoro') {
+    const prev = prevDurationsRef.current;
+    const changed =
+      prev.focusMinutes !== focusMinutes ||
+      prev.breakMinutes !== breakMinutes ||
+      prev.longBreakMinutes !== longBreakMinutes ||
+      prev.phase !== phase ||
+      prev.mode !== mode;
+    prevDurationsRef.current = { focusMinutes, breakMinutes, longBreakMinutes, phase, mode };
+
+    if (changed && !isRunning && mode === 'Pomodoro') {
       const sec = getInitialSecondsForPhase(phase);
       setTimeLeftSeconds(sec);
       setTotalDurationSeconds(sec);
@@ -199,12 +298,17 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       };
 
+      syncFromClock();
       timer = setInterval(syncFromClock, 1000);
       document.addEventListener('visibilitychange', syncFromClock);
+      window.addEventListener('focus', syncFromClock);
+      window.addEventListener('pageshow', syncFromClock);
 
       return () => {
         if (timer) clearInterval(timer);
         document.removeEventListener('visibilitychange', syncFromClock);
+        window.removeEventListener('focus', syncFromClock);
+        window.removeEventListener('pageshow', syncFromClock);
       };
     } else {
       endAtMsRef.current = null;
@@ -241,6 +345,11 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
   const pauseTimer = () => {
+    if (mode === 'Pomodoro' && endAtMsRef.current) {
+      setTimeLeftSeconds(Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000)));
+    } else if (mode === 'Stopwatch' && startedAtMsRef.current) {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAtMsRef.current) / 1000)));
+    }
     endAtMsRef.current = null;
     startedAtMsRef.current = null;
     setIsRunning(false);
@@ -316,7 +425,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!isRunning) return;
     updateActiveTimerNotification({
-      title: `Tracker · ${mode === 'Pomodoro' ? (phase === 'focus' ? 'Focus Running' : 'Break') : 'Deep Stopwatch'}`,
+      title: `Avdhut · ${mode === 'Pomodoro' ? (phase === 'focus' ? 'Focus Running' : 'Break') : 'Deep Stopwatch'}`,
       body: `${formattedTime} ${mode === 'Pomodoro' ? 'remaining' : 'elapsed'}`,
       isRunning: true,
       silent: true,
