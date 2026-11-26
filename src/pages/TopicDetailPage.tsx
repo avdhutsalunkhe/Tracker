@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, differenceInDays, parseISO } from 'date-fns';
+import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { uploadFormulaImage } from '../lib/studyDocuments';
 import { MistakeCategory, TopicStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { MathText } from '../components/common/MathText';
@@ -39,11 +41,15 @@ import {
   Sparkles,
   Eye,
   Edit3,
+  Image as ImageIcon,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 export const TopicDetailPage: React.FC = () => {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     topics,
     subjects,
@@ -94,8 +100,11 @@ export const TopicDetailPage: React.FC = () => {
   const [formulaTarget, setFormulaTarget] = useState('__topic__');
   const [formulaTitle, setFormulaTitle] = useState('');
   const [formulaBody, setFormulaBody] = useState('');
+  const [formulaImageFile, setFormulaImageFile] = useState<File | null>(null);
+  const [uploadingFormulaImage, setUploadingFormulaImage] = useState(false);
   const [formulaFilter, setFormulaFilter] = useState('all');
   const mdInputRef = useRef<HTMLInputElement | null>(null);
+  const formulaImgInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!topic) return;
@@ -390,11 +399,37 @@ export const TopicDetailPage: React.FC = () => {
 
   const handleAddFormula = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formulaTitle.trim() || !formulaBody.trim()) return;
-    const prompt = `${getFormulaPrefix()} ${formulaTitle.trim()}`;
-    await addFlashcard(topic.subject_id, prompt, formulaBody.trim());
-    setFormulaTitle('');
-    setFormulaBody('');
+    if (!formulaTitle.trim() || (!formulaBody.trim() && !formulaImageFile)) return;
+    setUploadingFormulaImage(true);
+    try {
+      let back = formulaBody.trim();
+      if (formulaImageFile) {
+        if (!user?.id) {
+          showToast({
+            type: 'error',
+            title: 'Sign In Required',
+            message: 'Sign in with your Supabase account to upload formula images.',
+          });
+          return;
+        }
+        const path = await uploadFormulaImage(user.id, formulaImageFile);
+        const marker = `[[formula-img:${path}]]`;
+        back = back ? `${back}\n\n${marker}` : marker;
+      }
+      const prompt = `${getFormulaPrefix()} ${formulaTitle.trim()}`;
+      await addFlashcard(topic.subject_id, prompt, back);
+      setFormulaTitle('');
+      setFormulaBody('');
+      setFormulaImageFile(null);
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Image Upload Failed',
+        message: (err as Error).message,
+      });
+    } finally {
+      setUploadingFormulaImage(false);
+    }
   };
 
   const handleMdFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1111,18 +1146,44 @@ export const TopicDetailPage: React.FC = () => {
             rows={2}
             value={formulaBody}
             onChange={(e) => setFormulaBody(e.target.value)}
-            placeholder="Formula or derivation (supports LaTeX $E = mc^2$ or $$...$$)..."
+            placeholder="Formula or derivation (supports LaTeX $E = mc^2$ or $$...$$) — or attach a book photo below..."
             className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
           />
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={formulaImgInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => setFormulaImageFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => formulaImgInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>{formulaImageFile ? 'Change Image' : 'Upload Book / Formula Image'}</span>
+              </button>
+              {formulaImageFile && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                  <span className="truncate max-w-[140px]">{formulaImageFile.name}</span>
+                  <button type="button" onClick={() => setFormulaImageFile(null)} className="hover:text-rose-500">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={!formulaTitle.trim() || !formulaBody.trim()}
+              disabled={uploadingFormulaImage || !formulaTitle.trim() || (!formulaBody.trim() && !formulaImageFile)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Save Formula</span>
+              {uploadingFormulaImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              <span>{uploadingFormulaImage ? 'Uploading...' : 'Save Formula'}</span>
             </button>
           </div>
         </form>

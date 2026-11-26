@@ -180,3 +180,20 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+export async function uploadFormulaImage(userId: string, file: File): Promise<string> {
+  if (!userId || !isSupabaseConfigured || !supabase) {
+    throw new Error('Sign in with your Supabase account to upload formula images.');
+  }
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storagePath = `${userId}/formula-images/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'image/png',
+    });
+  if (error) throw error;
+  return storagePath;
+}

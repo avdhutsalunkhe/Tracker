@@ -1,5 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { MathText } from './MathText';
+import { getStudyDocumentUrl } from '../../lib/studyDocuments';
+
+const FormulaImage: React.FC<{ storagePath: string }> = ({ storagePath }) => {
+  const [url, setUrl] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getStudyDocumentUrl(storagePath)
+      .then((signed) => {
+        if (!cancelled) setUrl(signed);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath]);
+
+  if (!url) {
+    return (
+      <div className="my-2 h-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse flex items-center justify-center text-[11px] text-slate-400">
+        Loading formula image...
+      </div>
+    );
+  }
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block my-2">
+      <img
+        src={url}
+        alt="Formula reference"
+        className="max-h-64 w-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain bg-white dark:bg-slate-950"
+      />
+    </a>
+  );
+};
 
 interface MarkdownRendererProps {
   text: string;
@@ -86,6 +121,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ text, classN
           </pre>
         </div>
       );
+      continue;
+    }
+
+    // Embedded Supabase Formula Image [[formula-img:path]]
+    const imgMatch = line.trim().match(/^\[\[formula-img:(.+)\]\]$/);
+    if (imgMatch) {
+      blocks.push(<FormulaImage key={`fimg-${i}`} storagePath={imgMatch[1].trim()} />);
+      i++;
       continue;
     }
 
