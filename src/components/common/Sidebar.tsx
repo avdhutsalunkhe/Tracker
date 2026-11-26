@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
     { to: '/revisions', label: 'Revisions Queue', icon: RotateCcw },
     { to: '/timer', label: 'Study Timer', icon: Timer },
     { to: '/tests', label: 'Tests & Mistakes', icon: Award },
+    { to: '/notes', label: 'Notes (.md)', icon: FileText },
     { to: '/vault', label: 'Formula Vault', icon: Bookmark },
     { to: '/analytics', label: 'Analytics', icon: BarChart3 },
     { to: '/settings', label: 'Settings', icon: Settings },

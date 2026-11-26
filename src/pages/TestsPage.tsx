@@ -5,6 +5,7 @@ import { TestLoggerModal } from '../components/tests/TestLoggerModal';
 import { MistakeList } from '../components/tests/MistakeList';
 import { MistakeBreakdownChart } from '../components/tests/MistakeBreakdownChart';
 import { PYQMatrix } from '../components/tests/PYQMatrix';
+import { MdQuestionBank } from '../components/tests/MdQuestionBank';
 import { Award } from 'lucide-react';
 
 export const TestsPage: React.FC = () => {
@@ -31,7 +32,10 @@ export const TestsPage: React.FC = () => {
       {/* 2. Mock Test Table */}
       <TestTable onOpenAddTest={() => setIsAddTestOpen(true)} />
 
-      {/* 3. PYQ Matrix */}
+      {/* 3. DPP, Practice Questions & Test Questions (.md Bank) */}
+      <MdQuestionBank />
+
+      {/* 4. PYQ Matrix */}
       <PYQMatrix />
 
       {/* 4. Mistake Notebook */}

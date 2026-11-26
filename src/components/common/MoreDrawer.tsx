@@ -36,6 +36,7 @@ export const MoreDrawer: React.FC<MoreDrawerProps> = ({ isOpen, onClose, onOpenA
     { to: '/syllabus', label: 'GATE 2027 Syllabus', icon: FileText, desc: 'Official CS & DA paper syllabus' },
     { to: '/revisions', label: 'Revisions Queue', icon: RotateCcw, desc: 'Spaced repetition schedule & overdue topics' },
     { to: '/tests', label: 'Tests & Mistakes', icon: Award, desc: 'Mock test scores, accuracy & mistake notebook' },
+    { to: '/notes', label: 'Notes (.md)', icon: FileText, desc: 'DS & CS notes organized by Subject & Topic' },
     { to: '/vault', label: 'Formula Vault', icon: Bookmark, desc: 'Key formulas, definitions & rapid flashcards' },
     { to: '/analytics', label: 'Analytics & Heatmap', icon: BarChart3, desc: '365-day consistency, hours chart & radar' },
     { to: '/settings', label: 'Settings', icon: Settings, desc: 'Exam date, daily goals & habit management' },

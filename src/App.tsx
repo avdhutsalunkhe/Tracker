@@ -31,6 +31,7 @@ import { SyllabusPage } from './pages/SyllabusPage';
 import { TopicDetailPage } from './pages/TopicDetailPage';
 import { SubjectDetailPage } from './pages/SubjectDetailPage';
 import { TimetablePage } from './pages/TimetablePage';
+import { NotesPage } from './pages/NotesPage';
 
 const AppContent: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -119,6 +120,7 @@ const AppContent: React.FC = () => {
             <Route path="/revisions" element={<RevisionsPage />} />
             <Route path="/timer" element={<TimerPage />} />
             <Route path="/tests" element={<TestsPage />} />
+            <Route path="/notes" element={<NotesPage />} />
             <Route path="/vault" element={<VaultPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
